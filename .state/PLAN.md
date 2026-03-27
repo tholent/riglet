@@ -285,7 +285,7 @@ Tasks 5.1 and 5.2 are sequential. Task 5.3 depends on both.
 
 Tasks 6.1 through 6.5 are sequential (each builds on the previous).
 
-### 6.1 [ ] Scaffold Svelte project in `ui/`
+### 6.1 [~] Scaffold Svelte project in `ui/`
 - **Agent**: @developer
 - **Directory**: `/Users/wells/Projects/riglet/ui/`
 - **Details**:
@@ -307,7 +307,7 @@ Tasks 6.1 through 6.5 are sequential (each builds on the previous).
   - `ui/src/lib/types.ts` -- TypeScript interfaces matching backend Pydantic models
 - **Done when**: API client functions compile, stores are reactive, WS manager connects in dev mode
 
-### 6.3 [ ] Implement setup wizard UI
+### 6.3 [~] Implement setup wizard UI
 - **Agent**: @developer
 - **Files**:
   - `ui/src/routes/setup/+page.svelte` -- Wizard container with step navigation (5 steps)
