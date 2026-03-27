@@ -40,6 +40,7 @@ select = ["E", "F", "I", "UP", "B", "SIM"]
 [tool.mypy]
 strict = true
 plugins = ["pydantic.mypy"]
+explicit_package_bases = true
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

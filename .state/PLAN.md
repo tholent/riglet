@@ -95,7 +95,7 @@ Tasks 2.1 and 2.2 are sequential (2.2 depends on 2.1).
 
 Tasks 3.1 through 3.4 are sequential.
 
-### 3.1 [ ] Implement `RadioInstance` and `RadioManager` in `server/state.py`
+### 3.1 [x] Implement `RadioInstance` and `RadioManager` in `server/state.py`
 - **Agent**: @developer
 - **File**: `/Users/wells/Projects/riglet/server/state.py`
 - **Classes**:
@@ -125,7 +125,7 @@ Tasks 3.1 through 3.4 are sequential.
     - Method: `def status() -> list[dict]` -- returns list of `{id, name, online, freq, mode, ptt}` per radio.
 - **Done when**: `mypy server/state.py` passes. Unit test for simulation mode (no rigctld) passes.
 
-### 3.2 [ ] Implement FastAPI app shell in `server/main.py`
+### 3.2 [x] Implement FastAPI app shell in `server/main.py`
 - **Agent**: @developer
 - **File**: `/Users/wells/Projects/riglet/server/main.py`
 - **Details**:
@@ -141,7 +141,7 @@ Tasks 3.1 through 3.4 are sequential.
   - Entry point: `if __name__ == "__main__": uvicorn.run("server.main:app", host="0.0.0.0", port=config.network.http_port, reload=False)`
 - **Done when**: `uvicorn server.main:app` starts without error (no radios configured, no static dir, returns 404 on `/`)
 
-### 3.3 [ ] Write tests for RadioInstance simulation mode
+### 3.3 [x] Write tests for RadioInstance simulation mode
 - **Agent**: @developer
 - **File**: `/Users/wells/Projects/riglet/server/tests/test_state.py`
 - **Test cases**:
@@ -153,7 +153,7 @@ Tasks 3.1 through 3.4 are sequential.
   - `RadioManager.get("nonexistent")` raises KeyError
 - **Done when**: All tests pass
 
-### 3.4 [ ] Implement rigctld Hamlib protocol details
+### 3.4 [x] Implement rigctld Hamlib protocol details
 - **Agent**: @developer
 - **File**: `/Users/wells/Projects/riglet/server/state.py` (extend)
 - **Details**:
