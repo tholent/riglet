@@ -2,46 +2,6 @@
 
 A self-hosted web application for browser-based control of amateur radios over a local LAN. Riglet runs on a Raspberry Pi 4 co-located with your radios, providing remote frequency/mode/PTT control, audio streaming, and live waterfall display from any device on the network.
 
-## Prerequisites
-
-- **Target**: Raspberry Pi 4 (64-bit) with Raspberry Pi OS Lite (Bookworm)
-- **Development**: macOS, Linux (any with Python 3.11+)
-- **Python**: 3.11 or later
-
-## Getting Started
-
-### Install Dependencies
-
-Riglet uses `uv` for dependency management. Install the project and all development tools:
-
-```bash
-cd server
-uv sync
-```
-
-This creates a virtual environment and installs all runtime and development dependencies.
-
-### Run Tests
-
-```bash
-cd server
-uv run pytest
-```
-
-All tests must pass before code is merged.
-
-### Lint and Type Check
-
-Riglet uses Ruff for linting and mypy for strict type checking.
-
-```bash
-cd server
-uv run ruff check .
-uv run mypy .
-```
-
-Both must pass without errors.
-
 ## Project Structure
 
 ```
@@ -55,14 +15,92 @@ riglet/
     tests/             # Unit tests
     pyproject.toml     # Dependencies and tool configuration
 
+  ui/                  # Frontend (SvelteKit SPA)
+    src/               # Svelte components and routes
+    build/             # Production build output
+
   image/               # Raspberry Pi image build
     config.ini         # rpi-image-gen profile
     packages.txt       # apt packages to install
     scripts/           # Post-install hooks
     files/             # systemd units, default config
-
-  ui/                  # Frontend (Svelte SPA, built separately)
 ```
+
+## Backend Development
+
+### Setup
+
+```bash
+cd server
+uv sync
+```
+
+### Run Development Server
+
+```bash
+cd server
+uv run uvicorn server.main:app --reload
+```
+
+The backend runs on `http://localhost:8080` in simulation mode (no hardware required).
+
+### Testing, Linting, and Type Checking
+
+```bash
+cd server
+uv run pytest                    # run full test suite
+uv run pytest tests/test_foo.py::test_name  # run a single test
+uv run ruff check .              # lint
+uv run ruff check --fix .        # lint + auto-fix
+uv run mypy .                    # type check (strict mode)
+```
+
+## Frontend Development
+
+### Setup
+
+```bash
+cd ui
+npm install
+```
+
+### Run Development Server
+
+```bash
+cd ui
+npm run dev
+```
+
+The dev server runs on `http://localhost:5173` and proxies `/api` requests to the backend at `localhost:8080`.
+
+### Production Build
+
+```bash
+cd ui
+npm run build
+```
+
+Output goes to `ui/build/`.
+
+## Running Locally
+
+1. Start the backend (from `server/`):
+   ```bash
+   uv run uvicorn server.main:app --reload
+   ```
+
+2. In a new terminal, start the frontend dev server (from `ui/`):
+   ```bash
+   npm run dev
+   ```
+
+3. Open `http://localhost:5173` in your browser.
+
+The backend runs in simulation mode — no hardware is required. The setup wizard will be disabled if you manually add a radio to the config first.
+
+## Image Build
+
+The `image/` directory contains an `rpi-image-gen` profile for building a flashable Raspberry Pi OS image for Pi 4 Bookworm 64-bit. This includes all services, dependencies, and the post-install script that configures the system on first boot.
 
 ## Architecture
 
