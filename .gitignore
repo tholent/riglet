@@ -214,3 +214,6 @@ node_modules/
 ui/build/
 ui/dist/
 *.pyc
+
+# macOS stuff
+.DS_Store
