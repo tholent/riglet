@@ -169,7 +169,7 @@ Tasks 3.1 through 3.4 are sequential.
 
 Tasks 4.1 through 4.5 can run in parallel (they are independent routers).
 
-### 4.1 [ ] Implement system routes in `server/routers/system.py`
+### 4.1 [x] Implement system routes in `server/routers/system.py`
 - **Agent**: @developer
 - **File**: `/Users/wells/Projects/riglet/server/routers/system.py`
 - **Endpoints**:
@@ -182,7 +182,7 @@ Tasks 4.1 through 4.5 can run in parallel (they are independent routers).
 - **Helper function**: `write_env_files(config: RigletConfig) -> None` -- for each enabled radio, write `/etc/riglet/radio-{id}.env` with `HAMLIB_MODEL`, `SERIAL_PORT`, `BAUD_RATE`, `RIGCTLD_PORT`, `PTT_METHOD`.
 - **Done when**: Tests for GET /api/status and POST /api/config pass
 
-### 4.2 [ ] Implement device discovery routes in `server/routers/devices.py`
+### 4.2 [x] Implement device discovery routes in `server/routers/devices.py`
 - **Agent**: @developer
 - **File**: `/Users/wells/Projects/riglet/server/routers/devices.py`
 - **Depends on**: `server/devices.py` (created in 4.2a)
@@ -192,7 +192,7 @@ Tasks 4.1 through 4.5 can run in parallel (they are independent routers).
   - `GET /api/devices/events` -- SSE endpoint using `sse-starlette`. Subscribes to a shared `asyncio.Queue` that is fed by the udev monitor.
 - **Done when**: Serial and audio endpoints return data (mocked in tests)
 
-### 4.2a [ ] Implement device discovery logic in `server/devices.py`
+### 4.2a [x] Implement device discovery logic in `server/devices.py`
 - **Agent**: @developer
 - **File**: `/Users/wells/Projects/riglet/server/devices.py`
 - **Functions**:
@@ -202,7 +202,7 @@ Tasks 4.1 through 4.5 can run in parallel (they are independent routers).
   - VID/PID lookup table: `KNOWN_RADIOS = {("10c4","ea60"): "Silicon Labs CP210x (IC-7300, ...)", ...}`
 - **Done when**: `discover_serial_devices()` works on dev machine (returns empty list if no USB serial). `mypy` clean.
 
-### 4.3 [ ] Implement CAT control routes in `server/routers/cat.py`
+### 4.3 [x] Implement CAT control routes in `server/routers/cat.py`
 - **Agent**: @developer
 - **File**: `/Users/wells/Projects/riglet/server/routers/cat.py`
 - **Endpoints** (all scoped to `{radio_id}`):
@@ -215,7 +215,7 @@ Tasks 4.1 through 4.5 can run in parallel (they are independent routers).
 - **Pydantic request models**: `FreqRequest`, `ModeRequest`, `PttRequest`, `NudgeRequest`
 - **Done when**: Tests with simulation-mode radio pass
 
-### 4.4 [ ] Implement audio control routes in `server/routers/audio.py`
+### 4.4 [x] Implement audio control routes in `server/routers/audio.py`
 - **Agent**: @developer
 - **File**: `/Users/wells/Projects/riglet/server/routers/audio.py`
 - **REST Endpoints**:
@@ -226,7 +226,7 @@ Tasks 4.1 through 4.5 can run in parallel (they are independent routers).
   - `WS /api/radio/{radio_id}/ws/audio` -- accept connection, store in `radio.ws_audio`. Binary bidirectional.
 - **Done when**: REST endpoints tested, WS accepts connection
 
-### 4.5 [ ] Implement waterfall WebSocket route in `server/routers/waterfall.py`
+### 4.5 [x] Implement waterfall WebSocket route in `server/routers/waterfall.py`
 - **Agent**: @developer
 - **File**: `/Users/wells/Projects/riglet/server/routers/waterfall.py`
 - **WebSocket endpoint** (placeholder -- full FFT in Phase 5):

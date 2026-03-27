@@ -2,20 +2,26 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Annotated
 
 import uvicorn
-from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import ValidationError
 
 from config import RigletConfig, default_config, load_config
-from state import RadioInstance, RadioManager
+from devices import DeviceEvent, UdevMonitor
+from routers.audio import router as _audio_router
+from routers.cat import router as _cat_router
+from routers.devices import router as _devices_router
+from routers.system import router as _system_router
+from routers.waterfall import router as _waterfall_router
+from state import RadioManager
 
 logger = logging.getLogger(__name__)
 
@@ -37,13 +43,18 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     manager = RadioManager()
     await manager.startup(config)
 
+    device_events: asyncio.Queue[DeviceEvent] = asyncio.Queue()
+    udev_monitor = UdevMonitor(device_events)
+
     app.state.config = config
     app.state.manager = manager
+    app.state.device_events = device_events
 
-    yield
+    async with udev_monitor:
+        yield
 
-    # --- Shutdown ---
-    await manager.shutdown()
+        # --- Shutdown ---
+        await manager.shutdown()
 
 
 # ---------------------------------------------------------------------------
@@ -61,45 +72,11 @@ if _STATIC_DIR.is_dir():
 # Routers — import stubs; only mount modules that actually export a router
 # ---------------------------------------------------------------------------
 
-try:
-    from routers import system as _system_mod
-
-    if hasattr(_system_mod, "router"):
-        app.include_router(_system_mod.router, prefix="/api")
-except ImportError:
-    pass
-
-try:
-    from routers import devices as _devices_mod
-
-    if hasattr(_devices_mod, "router"):
-        app.include_router(_devices_mod.router, prefix="/api")
-except ImportError:
-    pass
-
-try:
-    from routers import cat as _cat_mod
-
-    if hasattr(_cat_mod, "router"):
-        app.include_router(_cat_mod.router, prefix="/api")
-except ImportError:
-    pass
-
-try:
-    from routers import audio as _audio_mod
-
-    if hasattr(_audio_mod, "router"):
-        app.include_router(_audio_mod.router, prefix="/api")
-except ImportError:
-    pass
-
-try:
-    from routers import waterfall as _waterfall_mod
-
-    if hasattr(_waterfall_mod, "router"):
-        app.include_router(_waterfall_mod.router, prefix="/api")
-except ImportError:
-    pass
+app.include_router(_system_router, prefix="/api")
+app.include_router(_devices_router, prefix="/api")
+app.include_router(_cat_router, prefix="/api")
+app.include_router(_audio_router, prefix="/api")
+app.include_router(_waterfall_router, prefix="/api")
 
 # ---------------------------------------------------------------------------
 # Exception handlers
@@ -119,26 +96,6 @@ async def validation_error_handler(
             "errors": exc.errors(),
         },
     )
-
-
-# ---------------------------------------------------------------------------
-# Dependency helpers
-# ---------------------------------------------------------------------------
-
-
-def get_manager(request: Request) -> RadioManager:
-    manager: RadioManager = request.app.state.manager
-    return manager
-
-
-def get_radio(
-    radio_id: str,
-    manager: Annotated[RadioManager, Depends(get_manager)],
-) -> RadioInstance:
-    try:
-        return manager.get(radio_id)
-    except KeyError as exc:
-        raise HTTPException(status_code=404, detail=f"Radio {radio_id!r} not found") from exc
 
 
 # ---------------------------------------------------------------------------
