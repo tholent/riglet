@@ -1,0 +1,10 @@
+operator:
+  callsign: ""
+  grid: ""
+network:
+  hostname: riglet
+  http_port: 8080
+audio:
+  sample_rate: 16000
+  chunk_ms: 20
+radios: []

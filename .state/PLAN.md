@@ -359,7 +359,7 @@ Tasks 6.1 through 6.5 are sequential (each builds on the previous).
 
 Tasks 7.1 and 7.2 can run in parallel. 7.3 depends on both.
 
-### 7.1 [ ] Create systemd unit files
+### 7.1 [~] Create systemd unit files
 - **Agent**: @developer
 - **Files**:
   - `image/files/riglet.service`:
@@ -399,7 +399,7 @@ Tasks 7.1 and 7.2 can run in parallel. 7.3 depends on both.
     ```
 - **Done when**: Unit files are syntactically valid (`systemd-analyze verify` passes if available)
 
-### 7.2 [ ] Implement env file generation and service control in backend
+### 7.2 [~] Implement env file generation and service control in backend
 - **Agent**: @developer
 - **File**: `/Users/wells/Projects/riglet/server/routers/system.py` (extend)
 - **Details**:
@@ -414,7 +414,7 @@ Tasks 7.1 and 7.2 can run in parallel. 7.3 depends on both.
   - Guard all `systemctl` calls with try/except (graceful failure if not running on systemd, e.g., dev machine)
 - **Done when**: `write_env_files` creates correct files. `restart_services` calls systemctl (or logs skip on non-systemd host).
 
-### 7.3 [ ] Wire restart endpoint to service management
+### 7.3 [~] Wire restart endpoint to service management
 - **Agent**: @developer
 - **File**: `/Users/wells/Projects/riglet/server/routers/system.py` (extend)
 - **Details**:

@@ -28,25 +28,56 @@ _hamlib_models_cache: list[dict[str, Any]] | None = None
 
 
 def write_env_files(config: RigletConfig) -> None:
-    """Write /etc/riglet/radio-{id}.env for each enabled radio."""
+    """Write /etc/riglet/radio-{id}.env for each enabled radio; remove for disabled."""
     env_dir = Path("/etc/riglet")
+    env_dir.mkdir(parents=True, exist_ok=True)
     for radio in config.radios:
-        if not radio.enabled:
-            continue
         env_path = env_dir / f"radio-{radio.id}.env"
-        try:
-            env_dir.mkdir(parents=True, exist_ok=True)
-            env_path.write_text(
-                f"HAMLIB_MODEL={radio.hamlib_model}\n"
-                f"SERIAL_PORT={radio.serial_port}\n"
-                f"BAUD_RATE={radio.baud_rate}\n"
-                f"RIGCTLD_PORT={radio.rigctld_port}\n"
-                f"PTT_METHOD={radio.ptt_method}\n",
-                encoding="utf-8",
-            )
-            logger.info("Wrote env file %s", env_path)
-        except OSError as exc:
-            logger.warning("Could not write env file %s: %s", env_path, exc)
+        if radio.enabled:
+            try:
+                env_path.write_text(
+                    f"HAMLIB_MODEL={radio.hamlib_model}\n"
+                    f"SERIAL_PORT={radio.serial_port}\n"
+                    f"BAUD_RATE={radio.baud_rate}\n"
+                    f"RIGCTLD_PORT={radio.rigctld_port}\n"
+                    f"PTT_METHOD={radio.ptt_method}\n",
+                    encoding="utf-8",
+                )
+                logger.info("Wrote env file %s", env_path)
+            except OSError as exc:
+                logger.warning("Could not write env file %s: %s", env_path, exc)
+        else:
+            try:
+                env_path.unlink(missing_ok=True)
+            except OSError as exc:
+                logger.warning("Could not remove env file %s: %s", env_path, exc)
+
+
+async def _run_systemctl(*args: str) -> None:
+    """Run a systemctl command, logging a warning if systemctl is not found."""
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            "systemctl",
+            *args,
+            stdout=asyncio.subprocess.DEVNULL,
+            stderr=asyncio.subprocess.DEVNULL,
+        )
+        await proc.wait()
+    except FileNotFoundError:
+        logger.warning("systemctl not found — skipping: systemctl %s", " ".join(args))
+    except Exception as exc:
+        logger.warning("systemctl %s failed: %s", " ".join(args), exc)
+
+
+async def restart_services(config: RigletConfig) -> None:
+    """Reload systemd and restart rigctld instances per config, then restart riglet."""
+    await _run_systemctl("daemon-reload")
+    for radio in config.radios:
+        if radio.enabled:
+            await _run_systemctl("enable", "--now", f"rigctld@{radio.id}")
+        else:
+            await _run_systemctl("disable", "--now", f"rigctld@{radio.id}")
+    await _run_systemctl("restart", "riglet")
 
 
 # ---------------------------------------------------------------------------
@@ -122,7 +153,9 @@ async def post_config_restart(request: Request) -> JSONResponse:
             )
 
     # Notify all connected control WebSockets
-    restart_msg = json.dumps({"type": "service_restart"})
+    restart_msg = json.dumps(
+        {"type": "service_restart", "reason": "config_change", "eta_seconds": 5}
+    )
     for radio in manager.radios.values():
         if radio.ws_control is not None:
             try:
@@ -131,18 +164,7 @@ async def post_config_restart(request: Request) -> JSONResponse:
                 logger.warning("Failed to notify ws_control for %s: %s", radio.id, exc)
 
     write_env_files(config)
-
-    try:
-        proc = await asyncio.create_subprocess_exec(
-            "systemctl",
-            "restart",
-            "riglet",
-            stdout=asyncio.subprocess.DEVNULL,
-            stderr=asyncio.subprocess.DEVNULL,
-        )
-        await proc.wait()
-    except Exception as exc:
-        logger.warning("systemctl restart failed: %s", exc)
+    await restart_services(config)
 
     return JSONResponse(content={"status": "ok"})
 

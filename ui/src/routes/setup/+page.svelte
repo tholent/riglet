@@ -1,7 +1,8 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
-	import { getConfig, postConfig, postConfigRestart, getStatus } from '$lib/api.js';
+	import { getConfig, postConfig, postConfigRestart } from '$lib/api.js';
 	import { appConfig } from '$lib/stores.js';
+	import { waitForRestart } from '$lib/reconnect.js';
 	import StepWelcome from '$lib/components/wizard/StepWelcome.svelte';
 	import StepDetectRadios from '$lib/components/wizard/StepDetectRadios.svelte';
 	import StepMapAudio from '$lib/components/wizard/StepMapAudio.svelte';
@@ -76,19 +77,10 @@
 
 			await postConfigRestart();
 
-			// Poll /api/status until backend is back (up to 30s)
-			const deadline = Date.now() + 30_000;
-			while (Date.now() < deadline) {
-				await new Promise((res) => setTimeout(res, 1000));
-				try {
-					const status = await getStatus();
-					if (status.status === 'ok') {
-						await goto('/');
-						return;
-					}
-				} catch {
-					// Still restarting — keep polling
-				}
+			const back = await waitForRestart(30_000);
+			if (back) {
+				await goto('/');
+				return;
 			}
 			applyError = 'Service did not come back within 30 seconds. Try refreshing the page.';
 		} catch (e) {

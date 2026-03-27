@@ -1,0 +1,16 @@
+[Unit]
+Description=Riglet web application
+After=network.target avahi-daemon.service
+Wants=avahi-daemon.service
+
+[Service]
+Type=exec
+User=ham
+WorkingDirectory=/opt/riglet/app
+ExecStart=/opt/riglet/venv/bin/uvicorn server.main:app --host 0.0.0.0 --port 8080
+Restart=on-failure
+RestartSec=3
+Environment=RIGLET_CONFIG=/etc/riglet/config.yaml
+
+[Install]
+WantedBy=multi-user.target

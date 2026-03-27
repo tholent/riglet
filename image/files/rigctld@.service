@@ -1,0 +1,13 @@
+[Unit]
+Description=Hamlib rigctld for %i
+After=network.target
+
+[Service]
+EnvironmentFile=/etc/riglet/radio-%i.env
+ExecStart=/usr/bin/rigctld -m ${HAMLIB_MODEL} -r ${SERIAL_PORT} -s ${BAUD_RATE} -t ${RIGCTLD_PORT}
+Restart=on-failure
+RestartSec=5
+User=ham
+
+[Install]
+WantedBy=multi-user.target
