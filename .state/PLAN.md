@@ -297,7 +297,7 @@ Tasks 6.1 through 6.5 are sequential (each builds on the previous).
   - Verify `npm run build` produces static files
 - **Done when**: `npm run dev` shows Svelte welcome page, `npm run build` outputs to static dir
 
-### 6.2 [ ] Build shared services and stores
+### 6.2 [x] Build shared services and stores
 - **Agent**: @developer
 - **Files**:
   - `ui/src/lib/api.ts` -- REST API client functions: `getStatus()`, `getConfig()`, `postConfig()`, `getSerialDevices()`, `getAudioDevices()`, `getRadioCat()`, `postFreq()`, `postMode()`, `postPtt()`, `postNudge()`, `postCatTest()`, `postAudioVolume()`, `postAudioTest()`, `getHamlibModels()`, `postConfigRestart()`
@@ -324,7 +324,7 @@ Tasks 6.1 through 6.5 are sequential (each builds on the previous).
   - On "Apply and start": POST config, on success POST restart, enter reconnect loop (poll /api/status every 1s, 30s timeout), redirect to main UI
 - **Done when**: Wizard renders all 5 steps, form inputs work, API calls fire correctly
 
-### 6.4 [ ] Implement main radio UI
+### 6.4 [x] Implement main radio UI
 - **Agent**: @developer
 - **Files**:
   - `ui/src/routes/+page.svelte` -- Main UI page. If `setup_required` from /api/status, redirect to /setup.
@@ -342,7 +342,7 @@ Tasks 6.1 through 6.5 are sequential (each builds on the previous).
   - Frequency/mode/nudge commands sent via control WS
 - **Done when**: Full UI renders, waterfall scrolls (simulation data ok), frequency/mode controls update, PTT button toggles, audio plays
 
-### 6.5 [ ] Implement AudioWorklet for browser audio
+### 6.5 [x] Implement AudioWorklet for browser audio
 - **Agent**: @developer
 - **Files**:
   - `ui/src/lib/audio/pcm-worklet-processor.js` -- AudioWorkletProcessor subclass
@@ -432,7 +432,7 @@ Tasks 7.1 and 7.2 can run in parallel. 7.3 depends on both.
 
 All tasks in this phase are sequential.
 
-### 8.1 [ ] Create rpi-image-gen profile
+### 8.1 [x] Create rpi-image-gen profile
 - **Agent**: @developer
 - **Files**:
   - `image/config.ini` -- rpi-image-gen configuration for Pi 4, Bookworm 64-bit
@@ -458,7 +458,7 @@ All tasks in this phase are sequential.
   - `image/files/config.yaml.default` -- default config with `operator: {callsign: "", grid: ""}`, `network: {hostname: riglet, http_port: 8080}`, `audio: {sample_rate: 16000, chunk_ms: 20}`, `radios: []`
 - **Done when**: Files exist and are syntactically correct
 
-### 8.2 [ ] Create post-install script
+### 8.2 [x] Create post-install script
 - **Agent**: @developer
 - **File**: `image/scripts/01-configure.sh`
 - **Actions** (idempotent):
@@ -479,7 +479,7 @@ All tasks in this phase are sequential.
 
 ## Phase 9 -- First-Boot Wizard Flow (End-to-End)
 
-### 9.1 [ ] Implement setup-required detection and routing
+### 9.1 [x] Implement setup-required detection and routing
 - **Agent**: @developer
 - **Files**: `server/main.py` (extend), `ui/src/routes/+page.svelte` (extend)
 - **Details**:
@@ -488,7 +488,7 @@ All tasks in this phase are sequential.
   - After wizard completes and services restart, `/api/status` returns `setup_required: false`, frontend redirects to main UI.
 - **Done when**: Fresh config -> wizard shown. After wizard completion -> main UI shown.
 
-### 9.2 [ ] Implement reconnect loop in frontend
+### 9.2 [x] Implement reconnect loop in frontend
 - **Agent**: @developer
 - **File**: `ui/src/lib/reconnect.ts`
 - **Details**:
@@ -503,7 +503,7 @@ All tasks in this phase are sequential.
 
 ## Phase 10 -- Integration Testing and v1 Acceptance
 
-### 10.1 [ ] Write integration tests for API endpoints
+### 10.1 [x] Write integration tests for API endpoints
 - **Agent**: @developer
 - **File**: `/Users/wells/Projects/riglet/server/tests/test_api.py`
 - **Test cases** (using `httpx.AsyncClient` with FastAPI TestClient):
@@ -522,7 +522,7 @@ All tasks in this phase are sequential.
   - POST /api/radio/{id}/audio/volume with out-of-range values returns 422
 - **Done when**: All tests pass
 
-### 10.2 [ ] Write WebSocket integration tests
+### 10.2 [x] Write WebSocket integration tests
 - **Agent**: @developer
 - **File**: `/Users/wells/Projects/riglet/server/tests/test_websockets.py`
 - **Test cases**:

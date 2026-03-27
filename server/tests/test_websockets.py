@@ -186,3 +186,26 @@ def test_ws_waterfall_receives_fft_frame() -> None:
     assert abs(msg["span_khz"] - 48.0) < 1e-9
     for b in msg["bins"]:
         assert 0.0 <= b <= 1.0
+
+
+def test_ws_control_second_connection_displaces_first() -> None:
+    """Second connection to same radio's control WS displaces the first (single-operator)."""
+    with TestClient(app) as client:
+        inject_sim_radio()
+
+        with client.websocket_connect("/api/radio/r1/ws/control") as ws1:
+            ws1.receive_json()  # consume initial state snapshot
+
+            # Open a second connection — should displace ws1
+            with client.websocket_connect("/api/radio/r1/ws/control") as ws2:
+                snapshot = ws2.receive_json()
+                assert snapshot["type"] == "state"
+
+                # ws1 should now be closed; any further read raises
+                try:
+                    ws1.receive_json()
+                    displaced = False
+                except Exception:
+                    displaced = True
+
+                assert displaced, "First WS connection should have been closed by second connection"
