@@ -240,7 +240,7 @@ Tasks 4.1 through 4.5 can run in parallel (they are independent routers).
 
 Tasks 5.1 and 5.2 are sequential. Task 5.3 depends on both.
 
-### 5.1 [ ] Implement Control WebSocket in `server/routers/cat.py`
+### 5.1 [~] Implement Control WebSocket in `server/routers/cat.py`
 - **Agent**: @developer
 - **File**: `/Users/wells/Projects/riglet/server/routers/cat.py` (extend)
 - **Endpoint**: `WS /api/radio/{radio_id}/ws/control`
@@ -256,7 +256,7 @@ Tasks 5.1 and 5.2 are sequential. Task 5.3 depends on both.
   - Polling integration: `RadioInstance.poll_once()` should push changed fields to `ws_control` via `ws.send_json()`
 - **Done when**: Connect to WS, receive initial state, send freq command, see updated freq pushed back
 
-### 5.2 [ ] Implement audio capture/playback pipeline in `server/routers/audio.py`
+### 5.2 [~] Implement audio capture/playback pipeline in `server/routers/audio.py`
 - **Agent**: @developer
 - **File**: `/Users/wells/Projects/riglet/server/routers/audio.py` (extend)
 - **Details**:
@@ -267,7 +267,7 @@ Tasks 5.1 and 5.2 are sequential. Task 5.3 depends on both.
   - **Simulation mode**: If audio device not available, generate silence (RX) and discard (TX). Log warning once.
 - **Done when**: With a real or simulated audio device, RX audio streams to WS client, TX audio from WS is played (when PTT active)
 
-### 5.3 [ ] Implement server-side FFT for waterfall in `server/routers/waterfall.py`
+### 5.3 [~] Implement server-side FFT for waterfall in `server/routers/waterfall.py`
 - **Agent**: @developer
 - **File**: `/Users/wells/Projects/riglet/server/routers/waterfall.py` (extend)
 - **Details**:

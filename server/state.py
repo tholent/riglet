@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-import json
 import logging
 from typing import Any
 
@@ -329,9 +328,7 @@ class RadioInstance:
                 changes = await self.poll_once()
                 if changes and self.ws_control is not None:
                     try:
-                        await self.ws_control.send_text(
-                            json.dumps({"type": "state", "data": changes})
-                        )
+                        await self.ws_control.send_json({"type": "state", **changes})
                     except Exception as ws_exc:
                         logger.warning(
                             "ws_control send failed for radio %s: %s", self.id, ws_exc
