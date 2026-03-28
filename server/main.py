@@ -63,13 +63,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
 app = FastAPI(title="Riglet", version="0.1.0", lifespan=lifespan)
 
-# Mount static SPA only when the directory exists (production; skip in dev)
-_STATIC_DIR = Path("/opt/riglet/app/static")
-if _STATIC_DIR.is_dir():
-    app.mount("/", StaticFiles(directory=str(_STATIC_DIR), html=True), name="static")
-
 # ---------------------------------------------------------------------------
-# Routers — import stubs; only mount modules that actually export a router
+# Routers — must be registered before the catch-all static mount
 # ---------------------------------------------------------------------------
 
 app.include_router(_system_router, prefix="/api")
@@ -77,6 +72,14 @@ app.include_router(_devices_router, prefix="/api")
 app.include_router(_cat_router, prefix="/api")
 app.include_router(_audio_router, prefix="/api")
 app.include_router(_waterfall_router, prefix="/api")
+
+# Mount static SPA last — production path first, fallback to ui/build for dev.
+# Must come after routers so the "/" catch-all doesn't shadow /api/* routes.
+_STATIC_DIR = Path("/opt/riglet/app/static")
+_DEV_STATIC_DIR = Path(__file__).parent.parent / "ui" / "build"
+_active_static = next((d for d in (_STATIC_DIR, _DEV_STATIC_DIR) if d.is_dir()), None)
+if _active_static:
+    app.mount("/", StaticFiles(directory=str(_active_static), html=True), name="static")
 
 # ---------------------------------------------------------------------------
 # Exception handlers
