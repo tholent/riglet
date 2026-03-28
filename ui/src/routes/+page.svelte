@@ -59,6 +59,8 @@
 	let latestPcm = $state<Float32Array | null>(null);
 	// TX PCM samples (float32) for visualization during transmit
 	let txPcm = $state<Float32Array | null>(null);
+	// FFT bins from client-side mic FFT (simulation mode only)
+	let simFftBins = $state<Float32Array | null>(null);
 
 	// Active layout from store
 	let layout = $state<LayoutConfig>($activeLayout);
@@ -144,6 +146,7 @@
 		if (state.simulation) {
 			// Simulated radio: mic is the audio source (RX path)
 			audioMgr.onRxPcmFloat = (f32: Float32Array) => { latestPcm = f32; };
+			audioMgr.onSimFftBins = (bins: Float32Array) => { simFftBins = bins; };
 			await audioMgr.startMicAsRx();
 
 			return () => {
@@ -243,7 +246,7 @@
 					<div class="control-block">
 						<PresetSelector {radioId} currentFreqMhz={state.freq} {controlWs} />
 					</div>
-					<VisualizationPanel mode={vizMode} {radioId} cursorMhz={state.freq} radioMode={state.mode} pcmSamples={state.ptt ? txPcm : latestPcm} />
+					<VisualizationPanel mode={vizMode} {radioId} cursorMhz={state.freq} radioMode={state.mode} pcmSamples={state.ptt ? txPcm : latestPcm} fftBins={simFftBins} />
 					<div class="control-block">
 						<PttButton ptt={state.ptt} {controlWs} />
 					</div>
@@ -276,7 +279,7 @@
 							"
 						>
 							{#if panel.component === 'visualization'}
-								<VisualizationPanel mode={vizMode} {radioId} cursorMhz={state.freq} radioMode={state.mode} pcmSamples={state.ptt ? txPcm : latestPcm} />
+								<VisualizationPanel mode={vizMode} {radioId} cursorMhz={state.freq} radioMode={state.mode} pcmSamples={state.ptt ? txPcm : latestPcm} fftBins={simFftBins} />
 							{:else if panel.component === 'frequency'}
 								<div class="inner-block">
 									<FrequencyDisplay freq={state.freq} {controlWs} {presets} />

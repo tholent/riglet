@@ -53,7 +53,11 @@ export class AudioManager {
 	private micRxStream: MediaStream | null = null;
 	private micRxSource: MediaStreamAudioSourceNode | null = null;
 	private micRxAnalyser: AnalyserNode | null = null;
+	private micRxFftAnalyser: AnalyserNode | null = null;
 	private micRxRaf = 0;
+
+	/** Called with FFT magnitude bins (Float32, dBFS) for spectrum/waterfall when in simulation mode. */
+	onSimFftBins: ((bins: Float32Array) => void) | null = null;
 
 	// Squelch state
 	private squelch: SquelchParams = { ...DEFAULT_SQUELCH };
@@ -132,15 +136,30 @@ export class AudioManager {
 			// Feed mic through the DSP chain → squelch → volume → speakers
 			this.micRxSource.connect(this.dspChain.input);
 
-			// Tap mic signal for onRxPcmFloat (LUFS / visualization)
+			// Time-domain tap for onRxPcmFloat (LUFS / PCM-based visualizations)
 			this.micRxAnalyser = this.audioCtx.createAnalyser();
 			this.micRxAnalyser.fftSize = 512;
 			this.micRxSource.connect(this.micRxAnalyser);
 
-			const buf = new Float32Array(this.micRxAnalyser.fftSize);
+			// Frequency-domain tap for onSimFftBins (spectrum strip / waterfall)
+			this.micRxFftAnalyser = this.audioCtx.createAnalyser();
+			this.micRxFftAnalyser.fftSize = 2048;
+			this.micRxFftAnalyser.smoothingTimeConstant = 0.75;
+			this.micRxSource.connect(this.micRxFftAnalyser);
+
+			const fftBuf = new Float32Array(this.micRxFftAnalyser.frequencyBinCount);
+
 			const poll = () => {
-				this.micRxAnalyser!.getFloatTimeDomainData(buf);
-				this.onRxPcmFloat?.(buf);
+				// Allocate a fresh buffer each frame so Svelte $state detects the change
+				const pcmFrame = new Float32Array(this.micRxAnalyser!.fftSize);
+				this.micRxAnalyser!.getFloatTimeDomainData(pcmFrame);
+				this.onRxPcmFloat?.(pcmFrame);
+
+				if (this.onSimFftBins) {
+					this.micRxFftAnalyser!.getFloatFrequencyData(fftBuf);
+					this.onSimFftBins(fftBuf);
+				}
+
 				this.micRxRaf = requestAnimationFrame(poll);
 			};
 			this.micRxRaf = requestAnimationFrame(poll);
@@ -153,6 +172,8 @@ export class AudioManager {
 		cancelAnimationFrame(this.micRxRaf);
 		this.micRxAnalyser?.disconnect();
 		this.micRxAnalyser = null;
+		this.micRxFftAnalyser?.disconnect();
+		this.micRxFftAnalyser = null;
 		this.micRxSource?.disconnect();
 		this.micRxSource = null;
 		this.micRxStream?.getTracks().forEach((t) => t.stop());

@@ -22,6 +22,9 @@
 		mode: VisualizationMode;
 		radioId: string;
 		pcmSamples?: Float32Array | null;
+		/** External FFT bins (e.g. from client-side mic FFT in simulation mode). When provided,
+		 *  fed to renderers instead of waiting for the waterfall WebSocket. */
+		fftBins?: Float32Array | null;
 		sampleRate?: number;
 		cursorMhz?: number;
 		radioMode?: string;
@@ -31,6 +34,7 @@
 		mode = $bindable('waterfall' as VisualizationMode),
 		radioId,
 		pcmSamples = null,
+		fftBins = null,
 		sampleRate = 16000,
 		cursorMhz = 0,
 		radioMode = '',
@@ -191,6 +195,15 @@
 	$effect(() => {
 		const samples = pcmSamples;
 		if (samples && renderer) feedFrame(null, samples);
+	});
+
+	// Forward external FFT bins (simulation mode: client-side mic FFT)
+	$effect(() => {
+		const bins = fftBins;
+		if (!bins) return;
+		const binsArr = Array.from(bins);
+		if (renderer) renderer.render({ fftBins: binsArr, pcmSamples: null, sampleRate, timestamp: performance.now() } as VisualizationData);
+		if (spectrumRenderer) spectrumRenderer.render({ fftBins: binsArr, pcmSamples: null, sampleRate, timestamp: performance.now() } as VisualizationData);
 	});
 
 	// Forward cursor to waterfall renderer
