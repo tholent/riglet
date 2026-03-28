@@ -20,6 +20,8 @@
 	import VfoSelector from '$lib/components/VfoSelector.svelte';
 	import CatExtended from '$lib/components/CatExtended.svelte';
 	import LayoutManager from '$lib/components/LayoutManager.svelte';
+	import VizSwitcher from '$lib/components/VizSwitcher.svelte';
+	import type { VisualizationMode } from '$lib/viz/types.js';
 	import type { RadioState, PresetConfig } from '$lib/types.js';
 
 	let radioId = $state<string | null>(null);
@@ -50,8 +52,13 @@
 	let region = $state('us');
 	let enabledBands = $state<string[]>([]);
 
+	// Visualization mode
+	let vizMode = $state<VisualizationMode>('waterfall');
+
 	// Latest PCM samples for LUFS metering (fed from audio manager)
 	let latestPcm = $state<Float32Array | null>(null);
+	// TX PCM samples (float32) for visualization during transmit
+	let txPcm = $state<Float32Array | null>(null);
 
 	// Active layout from store
 	let layout = $state<LayoutConfig>($activeLayout);
@@ -146,6 +153,13 @@
 		});
 		audioMgr.onTxChunk = (buf: ArrayBuffer) => {
 			aws.sendBinary(buf);
+			// Convert s16le to float32 for TX visualization
+			const s16 = new Int16Array(buf);
+			const f32 = new Float32Array(s16.length);
+			for (let i = 0; i < s16.length; i++) {
+				f32[i] = s16[i] / 32768;
+			}
+			txPcm = f32;
 		};
 		aws.connect();
 		audioWs = aws;
@@ -195,6 +209,7 @@
 		>
 			{state.online ? (state.simulation ? 'SIM' : 'ONLINE') : 'OFFLINE'}
 		</span>
+		<VizSwitcher bind:mode={vizMode} />
 		<LayoutManager />
 	</header>
 
@@ -215,7 +230,7 @@
 					<div class="control-block">
 						<PresetSelector {radioId} currentFreqMhz={state.freq} {controlWs} />
 					</div>
-					<VisualizationPanel mode="waterfall" {radioId} cursorMhz={state.freq} radioMode={state.mode} />
+					<VisualizationPanel mode={vizMode} {radioId} cursorMhz={state.freq} radioMode={state.mode} pcmSamples={state.ptt ? txPcm : latestPcm} />
 					<div class="control-block">
 						<PttButton ptt={state.ptt} {controlWs} />
 					</div>
@@ -248,7 +263,7 @@
 							"
 						>
 							{#if panel.component === 'visualization'}
-								<VisualizationPanel mode="waterfall" {radioId} cursorMhz={state.freq} radioMode={state.mode} />
+								<VisualizationPanel mode={vizMode} {radioId} cursorMhz={state.freq} radioMode={state.mode} pcmSamples={state.ptt ? txPcm : latestPcm} />
 							{:else if panel.component === 'frequency'}
 								<div class="inner-block">
 									<FrequencyDisplay freq={state.freq} {controlWs} {presets} />

@@ -47,6 +47,9 @@ class CtcssRequest(BaseModel):
     tone: float
 
 
+_VFO_ALLOWLIST: frozenset[str] = frozenset({"vfoa", "vfob", "main", "sub"})
+
+
 # ---------------------------------------------------------------------------
 # REST Endpoints
 # ---------------------------------------------------------------------------
@@ -128,6 +131,13 @@ async def get_vfo(radio: RadioDep) -> JSONResponse:
 
 @router.post("/radio/{radio_id}/cat/vfo")
 async def set_vfo(body: VfoRequest, radio: RadioDep) -> JSONResponse:
+    from fastapi import HTTPException
+
+    if body.vfo.lower() not in _VFO_ALLOWLIST:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Invalid VFO {body.vfo!r}. Must be one of: VFOA, VFOB, Main, Sub",
+        )
     await radio.set_vfo(body.vfo)
     return JSONResponse(content={"vfo": radio.vfo})
 
@@ -232,8 +242,18 @@ async def ws_control(websocket: WebSocket, radio_id: str) -> None:
                     await radio.set_freq(new_freq)
                     await websocket.send_json({"type": "state", "freq": radio.freq})
                 elif msg_type == "vfo":
-                    await radio.set_vfo(str(msg["vfo"]))
-                    await websocket.send_json({"type": "state", "vfo": radio.vfo})
+                    vfo_val = str(msg["vfo"])
+                    if vfo_val.lower() not in _VFO_ALLOWLIST:
+                        await websocket.send_json(
+                            {
+                                "type": "error",
+                                "code": "invalid_vfo",
+                                "message": f"Invalid VFO {vfo_val!r}. Must be one of: VFOA, VFOB, Main, Sub",  # noqa: E501
+                            }
+                        )
+                    else:
+                        await radio.set_vfo(vfo_val)
+                        await websocket.send_json({"type": "state", "vfo": radio.vfo})
                 elif msg_type == "ctcss":
                     await radio.set_ctcss(float(msg["tone"]))
                     await websocket.send_json({"type": "state", "ctcss_tone": radio.ctcss_tone})

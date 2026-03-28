@@ -127,10 +127,10 @@ Riglet provides multiple visualization modes, all driven from the same audio/FFT
 | **3D spectrogram** | Frequency-time-amplitude in perspective view | Frequency (horizontal), Time (depth), Amplitude (vertical) |
 | **LUFS audio meter** | Real-time audio meter (Loudness Units Full Scale) | Perceived amplitude (vertical) |
 
-### Always-Visible Elements
+### Optional Overlay Elements
 
-- **LUFS audio meter**: Displayed alongside the visualization area. Color-coded levels with a peak-hold bar that decays slowly so transient peaks remain visible.
-- **Spectrum scope**: Displayed above the visualization area. Color-coded levels.
+- **LUFS audio meter**: User-toggleable panel. When enabled, displayed alongside the visualization area. Color-coded levels with a peak-hold bar that decays slowly so transient peaks remain visible.
+- **Spectrum scope**: User-toggleable visualization mode. When selected, displayed as the primary visualization with color-coded levels.
 
 ### Waterfall Cursor
 
@@ -375,7 +375,7 @@ v0.1.0 delivered:
 Building on v0.1.0, v0.2.0 expands Riglet into its full vision:
 
 1. **Multiple visualization modes**: Spectrum scope, oscilloscope, constellation diagram, phase meter, 3D spectrogram (waterfall already exists)
-2. **LUFS audio metering** with peak hold, always visible
+2. **LUFS audio metering** with peak hold (user-toggleable panel)
 3. **Waterfall cursor**: Mode-aware passband overlay, draggable for frequency tuning
 4. **Client-side DSP**: Notch filter, bandpass, noise reduction, compression, 3-band EQ
 5. **Client-side volume and squelch controls**

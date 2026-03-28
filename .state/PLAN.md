@@ -883,3 +883,79 @@ Run all quality checks and fix any issues:
 4. `cd /Users/wells/Projects/riglet/ui && npm run build` -- zero errors.
 
 **Done when**: All four commands exit 0 with clean output.
+
+---
+
+## Wave 6: Post-Audit Fixes
+
+_Addresses critical and high-severity findings from the v0.2.0 readiness audit (`analysis/v0.2.0_readiness_20260328.md`)._
+
+### Task 42 — Wire VizSwitcher into main page
+
+**Status:** TODO
+**Files:** `ui/src/routes/+page.svelte`
+
+**Work:**
+- Import `VizSwitcher.svelte` in `+page.svelte`
+- Add reactive `vizMode` state variable (default `"waterfall"`)
+- Render `<VizSwitcher bind:mode={vizMode} />` in the toolbar/controls area
+- Pass `mode={vizMode}` to `<VisualizationPanel>` so mode changes take effect immediately
+
+**Acceptance:** User can switch between waterfall, spectrum, oscilloscope, constellation, phase, and spectrogram3d modes from the main page UI.
+
+---
+
+### Task 43 — Connect TX visualization
+
+**Status:** TODO
+**Files:** `ui/src/routes/+page.svelte`
+
+**Work:**
+- Identify where `AudioManager` exposes TX PCM float data (e.g. an `onTxPcmFloat` callback or similar)
+- In `+page.svelte`, wire that callback to `VisualizationPanel`'s `onTxPcmFloat` prop
+- Ensure wiring is active only when PTT is engaged
+
+**Acceptance:** During transmit, the visualization panel receives and renders TX audio data.
+
+---
+
+### Task 44 — Update config.yaml.default
+
+**Status:** TODO
+**Files:** `deployment/files/config.yaml.default`
+
+**Work:**
+- Add `region: us` under the `operator:` section
+- Add `presets: []` at the top level
+
+**Acceptance:** The default config file is schema-valid against the current `RigletConfig` Pydantic model.
+
+---
+
+### Task 45 — Validate VFO input in cat.py
+
+**Status:** TODO
+**Files:** `server/routers/cat.py`
+
+**Work:**
+- Add an allowlist of valid VFO strings: `["VFOA", "VFOB", "Main", "Sub"]`
+- Before passing the VFO value to rigctld, check it against the allowlist (case-insensitive)
+- Return HTTP 422 Unprocessable Entity if the value is not in the allowlist
+
+**Acceptance:** Sending an arbitrary string as VFO value returns 422; all valid VFO values (`VFOA`, `VFOB`, `Main`, `Sub`) continue to work.
+
+---
+
+### Task 46 — Fix stale OVERVIEW.md documentation
+
+**Status:** TODO
+**Files:** `.state/OVERVIEW.md`
+
+**Work:**
+- In the File Structure section, replace `image/` with `deployment/`
+- Correct any description that states the spectrum scope is "always-visible" — it is user-toggleable
+- Correct any description that states LUFS metering is "always visible" — it is user-toggleable
+
+**Acceptance:** OVERVIEW.md accurately describes the current implementation and directory layout.
+
+---
