@@ -7,6 +7,7 @@
 	import { AudioManager } from '$lib/audio/audio-manager.js';
 	import Waterfall from '$lib/components/Waterfall.svelte';
 	import FrequencyDisplay from '$lib/components/FrequencyDisplay.svelte';
+	import BandSelector from '$lib/components/BandSelector.svelte';
 	import ModeSelector from '$lib/components/ModeSelector.svelte';
 	import PttButton from '$lib/components/PttButton.svelte';
 	import SmeterDisplay from '$lib/components/SmeterDisplay.svelte';
@@ -53,7 +54,7 @@
 			// Pick first available radio
 			const firstRadio = status.radios[0];
 			if (!firstRadio) {
-				await goto('/setup');
+				// No active radios but setup was completed — stay on main page
 				return;
 			}
 			radioId = firstRadio.id;
@@ -129,19 +130,19 @@
 
 	{#if radioId}
 		<div class="main-grid">
-			<!-- Left column: waterfall -->
+			<!-- Left column: freq controls + waterfall -->
 			<section class="waterfall-col">
+				<div class="radio-header">
+					<ModeSelector mode={state.mode} {controlWs} />
+					<FrequencyDisplay freq={state.freq} {controlWs} />
+					<BandSelector {controlWs} currentFreq={state.freq} />
+				</div>
 				<Waterfall {radioId} />
 			</section>
 
 			<!-- Right column: controls -->
 			<section class="controls-col">
 				<div class="control-block">
-					<FrequencyDisplay freq={state.freq} {controlWs} />
-				</div>
-
-				<div class="control-block mode-ptt-row">
-					<ModeSelector mode={state.mode} {controlWs} />
 					<PttButton ptt={state.ptt} {controlWs} />
 				</div>
 
@@ -175,9 +176,10 @@
 	}
 
 	.app {
-		min-height: 100vh;
+		height: 100vh;
 		display: flex;
 		flex-direction: column;
+		overflow: hidden;
 	}
 
 	.topbar {
@@ -214,16 +216,31 @@
 	.status-pill.online { border-color: #4caf50; color: #4caf50; }
 	.status-pill.offline { border-color: #f44336; color: #f44336; }
 
+	.radio-header {
+		display: flex;
+		flex-direction: column;
+		gap: 8px;
+		padding: 10px 12px;
+		background: #141414;
+		border-bottom: 1px solid #222;
+	}
+
 	.main-grid {
 		display: grid;
 		grid-template-columns: 1fr 360px;
 		gap: 0;
 		flex: 1;
+		min-height: 0;
+		overflow: hidden;
 	}
 
 	.waterfall-col {
-		padding: 16px;
+		padding: 8px;
 		border-right: 1px solid #222;
+		display: flex;
+		flex-direction: column;
+		min-height: 0;
+		overflow: hidden;
 	}
 
 	.controls-col {
@@ -239,14 +256,6 @@
 		border: 1px solid #2a2a2a;
 		border-radius: 6px;
 		padding: 14px;
-	}
-
-	.mode-ptt-row {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		gap: 12px;
-		flex-wrap: wrap;
 	}
 
 	.no-radio {

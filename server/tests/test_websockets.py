@@ -208,4 +208,4 @@ def test_ws_control_second_connection_displaces_first() -> None:
                 except Exception:
                     displaced = True
 
-                assert displaced, "First WS connection should have been closed by second connection"
+                assert displaced, "First WS connection should have been closed by second connection" # noqa

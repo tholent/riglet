@@ -10,16 +10,16 @@
 	let editing = $state(false);
 	let editValue = $state('');
 
-	// Common amateur bands (MHz): label -> center freq
-	const BANDS: { label: string; freq: number }[] = [
-		{ label: '160m', freq: 1.9 },
-		{ label: '80m', freq: 3.75 },
-		{ label: '40m', freq: 7.1 },
-		{ label: '20m', freq: 14.2 },
-		{ label: '17m', freq: 18.1 },
-		{ label: '15m', freq: 21.2 },
-		{ label: '10m', freq: 28.5 },
-	];
+	// Format freq (MHz float) as XX.XXX.XXX with dot separators.
+	// E.g. 14.2 -> "14.200.000", 7.03815 -> "7.038.150", 146.52 -> "146.520.000"
+	function formatFreq(mhz: number): string {
+		const hz = Math.round(mhz * 1_000_000);
+		// Split into three groups from the right: ones+tens+hundreds (kHz sub), kHz, MHz
+		const sub   = hz % 1000;           // 0–999
+		const khz   = Math.floor(hz / 1000) % 1000; // 0–999
+		const mhzPart = Math.floor(hz / 1_000_000);  // leading group, no zero-pad
+		return `${mhzPart}.${String(khz).padStart(3, '0')}.${String(sub).padStart(3, '0')}`;
+	}
 
 	function startEdit() {
 		editValue = freq.toFixed(6);
@@ -39,71 +39,53 @@
 		if (e.key === 'Escape') editing = false;
 	}
 
-	function jumpTo(mhz: number) {
-		controlWs?.send({ type: 'freq', freq: mhz });
-	}
-
 	function nudge(direction: 1 | -1) {
 		controlWs?.send({ type: 'nudge', direction });
 	}
 </script>
 
-<div class="freq-block">
-	<div class="freq-row">
-		<button class="nudge" onclick={() => nudge(-1)} aria-label="Tune down 1 kHz">−</button>
+<div class="freq-row">
+	<button class="nudge" onclick={() => nudge(-1)} aria-label="Tune down 1 kHz">−</button>
 
-		{#if editing}
-			<!-- svelte-ignore a11y_autofocus -->
-			<input
-				autofocus
-				class="freq-input"
-				type="text"
-				bind:value={editValue}
-				onblur={commitEdit}
-				onkeydown={onKeydown}
-			/>
-		{:else}
-			<button class="freq-display" onclick={startEdit} aria-label="Click to edit frequency">
-				{freq.toFixed(3)} <span class="unit">MHz</span>
-			</button>
-		{/if}
+	{#if editing}
+		<!-- svelte-ignore a11y_autofocus -->
+		<input
+			autofocus
+			class="freq-input"
+			type="text"
+			bind:value={editValue}
+			onblur={commitEdit}
+			onkeydown={onKeydown}
+		/>
+	{:else}
+		<button class="freq-display" onclick={startEdit} aria-label="Click to edit frequency">
+			{formatFreq(freq)}<span class="unit"> MHz</span>
+		</button>
+	{/if}
 
-		<button class="nudge" onclick={() => nudge(1)} aria-label="Tune up 1 kHz">+</button>
-	</div>
-
-	<div class="bands">
-		{#each BANDS as band}
-			<button class="band-pill" onclick={() => jumpTo(band.freq)}>{band.label}</button>
-		{/each}
-	</div>
+	<button class="nudge" onclick={() => nudge(1)} aria-label="Tune up 1 kHz">+</button>
 </div>
 
 <style>
-	.freq-block {
-		display: flex;
-		flex-direction: column;
-		gap: 8px;
-	}
-
 	.freq-row {
-		display: flex;
+		display: inline-flex;
 		align-items: center;
-		gap: 8px;
+		gap: 6px;
 	}
 
 	.freq-display {
-		font-size: 2.2rem;
+		font-size: 3.5rem;
 		font-family: 'Courier New', monospace;
 		font-weight: 700;
 		color: #4cff8a;
 		background: #0a0a0a;
 		border: 1px solid #333;
 		border-radius: 4px;
-		padding: 8px 16px;
+		padding: 4px 12px;
 		cursor: pointer;
-		letter-spacing: 0.05em;
-		min-width: 240px;
-		text-align: center;
+		letter-spacing: 0.02em;
+		white-space: nowrap;
+		line-height: 1;
 	}
 
 	.freq-display:hover {
@@ -117,22 +99,23 @@
 	}
 
 	.freq-input {
-		font-size: 2.2rem;
+		font-size: 3.5rem;
 		font-family: 'Courier New', monospace;
 		font-weight: 700;
 		color: #4cff8a;
 		background: #0a0a0a;
 		border: 1px solid #4a9eff;
 		border-radius: 4px;
-		padding: 8px 16px;
-		min-width: 240px;
-		text-align: center;
+		padding: 4px 12px;
+		white-space: nowrap;
+		line-height: 1;
+		min-width: 260px;
 	}
 
 	.nudge {
-		font-size: 1.6rem;
-		width: 44px;
-		height: 44px;
+		font-size: 1.4rem;
+		width: 36px;
+		height: 36px;
 		background: #1a1a1a;
 		border: 1px solid #444;
 		border-radius: 4px;
@@ -142,25 +125,8 @@
 		align-items: center;
 		justify-content: center;
 		padding: 0;
+		flex-shrink: 0;
 	}
 
 	.nudge:hover { background: #2a2a2a; border-color: #666; }
-
-	.bands {
-		display: flex;
-		gap: 6px;
-		flex-wrap: wrap;
-	}
-
-	.band-pill {
-		padding: 4px 10px;
-		border: 1px solid #444;
-		border-radius: 12px;
-		background: #1a1a1a;
-		color: #aaa;
-		font-size: 0.8rem;
-		cursor: pointer;
-	}
-
-	.band-pill:hover { border-color: #4a9eff; color: #4a9eff; }
 </style>

@@ -168,13 +168,14 @@ async def test_radio_manager_get_nonexistent_raises_key_error() -> None:
 
 
 @pytest.mark.asyncio
-async def test_radio_manager_startup_disabled_radio_not_added() -> None:
-    """Disabled radios are skipped during startup."""
+async def test_radio_manager_startup_disabled_radio_added_as_simulation() -> None:
+    """Disabled radios are added as simulation instances so the UI can connect."""
     cfg = make_radio_config(radio_id="r1", enabled=False)
     config = make_riglet_config(radios=[cfg])
     manager = RadioManager()
     await manager.startup(config)
-    assert "r1" not in manager.radios
+    assert "r1" in manager.radios
+    assert manager.radios["r1"].simulation is True
     await manager.shutdown()
 
 

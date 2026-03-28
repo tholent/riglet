@@ -240,7 +240,7 @@ Tasks 4.1 through 4.5 can run in parallel (they are independent routers).
 
 Tasks 5.1 and 5.2 are sequential. Task 5.3 depends on both.
 
-### 5.1 [~] Implement Control WebSocket in `server/routers/cat.py`
+### 5.1 [x] Implement Control WebSocket in `server/routers/cat.py`
 - **Agent**: @developer
 - **File**: `/Users/wells/Projects/riglet/server/routers/cat.py` (extend)
 - **Endpoint**: `WS /api/radio/{radio_id}/ws/control`
@@ -256,7 +256,7 @@ Tasks 5.1 and 5.2 are sequential. Task 5.3 depends on both.
   - Polling integration: `RadioInstance.poll_once()` should push changed fields to `ws_control` via `ws.send_json()`
 - **Done when**: Connect to WS, receive initial state, send freq command, see updated freq pushed back
 
-### 5.2 [~] Implement audio capture/playback pipeline in `server/routers/audio.py`
+### 5.2 [x] Implement audio capture/playback pipeline in `server/routers/audio.py`
 - **Agent**: @developer
 - **File**: `/Users/wells/Projects/riglet/server/routers/audio.py` (extend)
 - **Details**:
@@ -267,7 +267,7 @@ Tasks 5.1 and 5.2 are sequential. Task 5.3 depends on both.
   - **Simulation mode**: If audio device not available, generate silence (RX) and discard (TX). Log warning once.
 - **Done when**: With a real or simulated audio device, RX audio streams to WS client, TX audio from WS is played (when PTT active)
 
-### 5.3 [~] Implement server-side FFT for waterfall in `server/routers/waterfall.py`
+### 5.3 [x] Implement server-side FFT for waterfall in `server/routers/waterfall.py`
 - **Agent**: @developer
 - **File**: `/Users/wells/Projects/riglet/server/routers/waterfall.py` (extend)
 - **Details**:
@@ -285,7 +285,7 @@ Tasks 5.1 and 5.2 are sequential. Task 5.3 depends on both.
 
 Tasks 6.1 through 6.5 are sequential (each builds on the previous).
 
-### 6.1 [~] Scaffold Svelte project in `ui/`
+### 6.1 [x] Scaffold Svelte project in `ui/`
 - **Agent**: @developer
 - **Directory**: `/Users/wells/Projects/riglet/ui/`
 - **Details**:
@@ -533,23 +533,129 @@ All tasks in this phase are sequential.
   - Control WS: second connection to same radio replaces first (single operator)
 - **Done when**: All tests pass
 
-### 10.3 [ ] Verify v1 acceptance criteria checklist
-- **Agent**: @tester
-- **Checklist** (manual or scripted):
-  - [ ] `uv sync` in `server/` succeeds
-  - [ ] `ruff check server/` passes with zero errors
-  - [ ] `mypy server/` passes with zero errors
-  - [ ] `pytest server/tests/` all green
-  - [ ] `npm run build` in `ui/` succeeds
-  - [ ] Backend starts in simulation mode: `uvicorn server.main:app`
-  - [ ] `GET /api/status` returns `setup_required: true` with no config
-  - [ ] Setup wizard loads at `http://localhost:8080/setup`
-  - [ ] Waterfall canvas renders (simulation data)
-  - [ ] Frequency/mode controls update via control WS
-  - [ ] PTT button toggles state
-  - [ ] Audio worklet initializes without errors
-  - [ ] Image build files (`image/`) are complete and syntactically valid
-- **Done when**: All checklist items verified
+### 10.3 [x] Dev-mode fixes and acceptance checklist validation
+- **Agent**: @developer, @tester
+- **Changes made**:
+  - `server/config.py` — `_DEFAULT_CONFIG_PATH` now respects `RIGLET_CONFIG` environment variable
+  - `server/routers/system.py` — `write_env_files()` gracefully skips on PermissionError; `POST /api/config/restart` reloads manager in-place after systemctl (for dev machines where systemctl is unavailable); `GET /api/status` sets `setup_required` based on `config.radios` being empty
+  - `server/state.py` — `RadioManager.startup()` now creates simulation instances for disabled radios instead of skipping them
+  - `ui/src/routes/+page.svelte` — Removed duplicate redirect to `/setup` when `status.radios` is empty
+  - `server/tests/test_state.py` — Updated test `test_radio_manager_startup_disabled_radio_not_added` → renamed to `test_radio_manager_startup_disabled_radio_added_as_simulation`
+- **Acceptance checklist** (verified):
+  - [x] `uv sync` in `server/` succeeds
+  - [x] `ruff check server/` passes with zero errors
+  - [x] `mypy server/` passes with zero errors
+  - [x] `pytest server/tests/` all green
+  - [x] `npm run build` in `ui/` succeeds
+  - [x] Backend starts in simulation mode: `uvicorn server.main:app`
+  - [x] `GET /api/status` returns `setup_required: true` with no config
+  - [x] Setup wizard loads at `http://localhost:8080/setup`
+  - [x] Waterfall canvas renders (simulation data)
+  - [x] Frequency/mode controls update via control WS
+  - [x] PTT button toggles state
+  - [x] Audio worklet initializes without errors
+  - [x] Image build files (`image/`) are complete and syntactically valid
+- **Done when**: All checklist items verified and all changes integrated
+
+---
+
+## Phase 11 -- UI Layout Redesign
+
+Tasks 11.1, 11.2, 11.3, and 11.4 can run in parallel. Task 11.5 depends on 11.1, 11.2, and 11.3.
+
+### 11.1 [x] Create `BandSelector.svelte` component
+- **Agent**: @developer
+- **File**: `/Users/wells/Projects/riglet/ui/src/lib/components/BandSelector.svelte` (new file)
+- **Details**:
+  - Props: `controlWs: ControlWebSocket | null`, `currentFreq: number`
+  - Define band data array with fields: `label`, `defaultMhz`, `rangeLow`, `rangeHigh`:
+    - 160m: 1.900 (1.800--2.000)
+    - 80m: 3.750 (3.500--4.000)
+    - 40m: 7.100 (7.000--7.300)
+    - 30m: 10.120 (10.100--10.150)
+    - 20m: 14.200 (14.000--14.350)
+    - 17m: 18.100 (18.068--18.168)
+    - 15m: 21.200 (21.000--21.450)
+    - 12m: 24.940 (24.890--24.990)
+    - 10m: 28.500 (28.000--29.700)
+    - 6m: 50.150 (50.000--54.000)
+  - Clicking a band pill calls `controlWs?.send({ type: 'freq', freq: <defaultMhz> })`
+  - Pill whose range contains `currentFreq` receives `.active` CSS class
+  - Pill styling: `padding: 4px 10px`, `font-size: 0.8rem`, compact horizontal layout
+- **Done when**: Component renders all 10 band pills, clicking a pill sends the correct freq command, active band is visually highlighted based on `currentFreq`
+
+### 11.2 [x] Redesign `FrequencyDisplay.svelte` for header bar layout
+- **Agent**: @developer
+- **File**: `/Users/wells/Projects/riglet/ui/src/lib/components/FrequencyDisplay.svelte` (modify)
+- **Details**:
+  - Remove band pill buttons (band selection moves to `BandSelector.svelte`)
+  - Change frequency format to `XX.XXX.XXX MHz`: take freq (MHz float), multiply by 1,000,000 to get Hz, format as dot-separated groups (`XX.XXX.XXX`), no leading zero-padding on the first group (e.g., `7.038.150` not `007.038.150`), append ` MHz` in smaller font-weight
+  - Font: large monospace bold, 48--64px for the digit groups, smaller lighter `MHz` label
+  - Keep nudge buttons (+/- 1 kHz) flanking the frequency display
+  - Keep click-to-edit inline input behavior
+  - Layout: horizontal inline (`display: inline-flex` or equivalent) so it fits inside a flex row; remove any outer block wrapper that forces full-width
+- **Done when**: Frequency displays in `XX.XXX.XXX MHz` format, nudge and edit still work, component fits inline in a flex row without forcing a line break
+
+### 11.3 [x] Reduce `ModeSelector.svelte` button sizing
+- **Agent**: @developer
+- **File**: `/Users/wells/Projects/riglet/ui/src/lib/components/ModeSelector.svelte` (modify, CSS only)
+- **Details**:
+  - Reduce button padding from `6px 14px` to `4px 10px`
+  - Reduce font-size from `0.9rem` to `0.8rem`
+  - No functional or markup changes
+- **Done when**: Mode buttons render smaller; existing mode selection behavior is unchanged
+
+### 11.4 [x] Add frequency axis to `Waterfall.svelte`
+- **Agent**: @developer
+- **File**: `/Users/wells/Projects/riglet/ui/src/lib/components/Waterfall.svelte` (modify)
+- **Details**:
+  - Parse `center_mhz` and `span_khz` fields from incoming FFT WebSocket frames (already present in the frame payload)
+  - Store parsed values as reactive state: `centerMhz`, `spanKhz`
+  - Add a second `<canvas>` element (height: 28px) below the existing waterfall canvas for the frequency axis
+  - Constant: `AXIS_HEIGHT = 28`
+  - Use a `ResizeObserver` on the wrapper div to track rendered pixel width (`axisWidth`) for accurate label positioning
+  - Implement `drawAxis()` function triggered via `$effect` when `centerMhz`, `spanKhz`, or `axisWidth` changes:
+    1. Compute `startMhz = centerMhz - spanKhz / 2000`, `endMhz = centerMhz + spanKhz / 2000`
+    2. Pick tick interval based on span: <=10kHz -> 1kHz, <=50kHz -> 5kHz, <=200kHz -> 25kHz, <=500kHz -> 50kHz, >500kHz -> 100kHz
+    3. For each tick: `x = (tickMhz - startMhz) / (endMhz - startMhz) * axisWidth`
+    4. Draw 4px vertical tick line, label below centered: format as `XX.XXX` MHz (3 decimal places)
+    5. Style: font `10px monospace`, label color `#888`, tick color `#555`
+  - Graceful degradation: if `center_mhz` or `span_khz` is 0 or missing, skip axis drawing entirely
+  - Axis canvas CSS: `display: block; width: 100%; height: 28px; background: #0d0d0d`
+- **Done when**: Frequency axis renders below the waterfall with correctly positioned tick marks and labels; axis updates when center/span changes; no errors when values are missing
+
+### 11.5 [x] Restructure `+page.svelte` layout with radio header bar
+- **Agent**: @developer
+- **File**: `/Users/wells/Projects/riglet/ui/src/routes/+page.svelte` (modify)
+- **Details**:
+  - Import `BandSelector` from `$lib/components/BandSelector.svelte`
+  - Add a `.radio-header` bar between the existing topbar and the main grid containing (in order): `FrequencyDisplay`, `BandSelector`, `ModeSelector`
+  - Right column retains: `PttButton` (in its own control block), `SmeterDisplay`, `AudioControls`
+  - Remove the `.mode-ptt-row` wrapper div and its associated CSS
+  - New CSS for the radio header bar:
+    ```css
+    .radio-header {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 10px 16px;
+      background: #141414;
+      border-bottom: 1px solid #222;
+      flex-wrap: wrap;
+    }
+    ```
+  - Update `.waterfall-col` CSS: `padding: 8px; border-right: 1px solid #222; display: flex; flex-direction: column;`
+  - Target layout structure:
+    ```
+    [topbar: Riglet | radio-name | status-pill]
+    [radio-header: nudge(-) | freq display | nudge(+) | band pills | mode selector]
+    [waterfall-col (with freq axis below) | controls-col (ptt, smeter, audio)]
+    ```
+- **Done when**: New layout renders with frequency display, band selector, and mode selector in the header bar; waterfall occupies the left column with frequency axis below; controls occupy the right column; no regressions in existing functionality
+
+---
+
+> **Dependency note for Phase 11**: Tasks 11.1, 11.2, 11.3, and 11.4 have no interdependencies and can execute in parallel. Task 11.5 depends on 11.1 (BandSelector import), 11.2 (FrequencyDisplay inline layout), and 11.3 (ModeSelector sizing) being complete before it can integrate them into the page layout. Task 11.4 is independent and can run in parallel with 11.5.
 
 ---
 
@@ -583,6 +689,9 @@ Phase 9 (sequential: 9.1 -> 9.2) -- depends on Phase 6 + Phase 7
   |
   v
 Phase 10 (10.1 || 10.2, then 10.3) -- final validation
+  |
+  v
+Phase 11 (parallel: [11.1, 11.2, 11.3, 11.4], then 11.5) -- UI layout redesign
 ```
 
 Notes:
@@ -590,3 +699,4 @@ Notes:
 - Phase 8 can start as soon as Phase 7 is complete
 - Phase 6 (Svelte) can start as soon as Phase 4 provides API endpoints to develop against
 - Phase 10 requires all other phases to be complete
+- Phase 11 depends on Phase 6 (existing UI components must exist). Within Phase 11: [11.1, 11.2, 11.3, 11.4] run in parallel, then 11.5 after 11.1+11.2+11.3

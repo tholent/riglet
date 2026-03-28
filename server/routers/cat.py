@@ -164,14 +164,18 @@ async def ws_control(websocket: WebSocket, radio_id: str) -> None:
             try:
                 if msg_type == "freq":
                     await radio.set_freq(float(msg["freq"]))
+                    await websocket.send_json({"type": "state", "freq": radio.freq})
                 elif msg_type == "mode":
                     await radio.set_mode(str(msg["mode"]))
+                    await websocket.send_json({"type": "state", "mode": radio.mode})
                 elif msg_type == "ptt":
                     await radio.set_ptt(bool(msg["active"]))
+                    await websocket.send_json({"type": "state", "ptt": radio.ptt})
                 elif msg_type == "nudge":
                     direction = int(msg["direction"])
                     new_freq = round(radio.freq + direction * 0.001, 6)
                     await radio.set_freq(new_freq)
+                    await websocket.send_json({"type": "state", "freq": radio.freq})
                 else:
                     await websocket.send_json(
                         {

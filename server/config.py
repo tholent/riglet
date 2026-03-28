@@ -11,7 +11,9 @@ from typing import Literal
 import yaml
 from pydantic import BaseModel, field_validator, model_validator
 
-_DEFAULT_CONFIG_PATH = Path("/etc/riglet/config.yaml")
+_DEFAULT_CONFIG_PATH = Path(
+    os.environ.get("RIGLET_CONFIG", Path.home() / ".config" / "riglet" / "config.yaml")
+)
 
 
 class OperatorConfig(BaseModel):

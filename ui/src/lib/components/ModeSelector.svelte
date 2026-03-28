@@ -34,12 +34,12 @@
 	}
 
 	.mode-btn {
-		padding: 6px 14px;
+		padding: 4px 10px;
 		border: 1px solid #444;
 		border-radius: 4px;
 		background: #1a1a1a;
 		color: #aaa;
-		font-size: 0.9rem;
+		font-size: 0.8rem;
 		font-weight: 600;
 		cursor: pointer;
 		transition: all 0.12s;

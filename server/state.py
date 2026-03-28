@@ -365,13 +365,18 @@ class RadioManager:
         self.config: RigletConfig | None = None
 
     async def startup(self, config: RigletConfig) -> None:
-        """Create, connect, and start polling for each enabled radio."""
+        """Create, connect, and start polling for each configured radio.
+
+        Disabled radios still get an instance (simulation mode) so the UI
+        has something to connect to without real hardware.
+        """
         self.config = config
         for radio_cfg in config.radios:
-            if not radio_cfg.enabled:
-                continue
             instance = RadioInstance(radio_cfg.id, radio_cfg)
-            await instance.connect_rigctld()
+            if radio_cfg.enabled:
+                await instance.connect_rigctld()
+            else:
+                instance.simulation = True
             await instance.start_polling()
             self.radios[radio_cfg.id] = instance
         logger.info(

@@ -30,7 +30,11 @@ _hamlib_models_cache: list[dict[str, Any]] | None = None
 def write_env_files(config: RigletConfig) -> None:
     """Write /etc/riglet/radio-{id}.env for each enabled radio; remove for disabled."""
     env_dir = Path("/etc/riglet")
-    env_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        env_dir.mkdir(parents=True, exist_ok=True)
+    except PermissionError:
+        logger.warning("Cannot write env files to %s (no permission) — skipping", env_dir)
+        return
     for radio in config.radios:
         env_path = env_dir / f"radio-{radio.id}.env"
         if radio.enabled:
@@ -88,9 +92,12 @@ async def restart_services(config: RigletConfig) -> None:
 @router.get("/status")
 async def get_status(request: Request) -> JSONResponse:
     manager: RadioManager = request.app.state.manager
+    config: RigletConfig = request.app.state.config
     radios = manager.status()
     body: dict[str, Any] = {"status": "ok", "radios": radios}
-    if not radios:
+    # setup_required only when no radios have been configured at all (empty config).
+    # Disabled radios still count — the user has been through setup.
+    if not config.radios:
         body["setup_required"] = True
     return JSONResponse(content=body)
 
@@ -165,6 +172,14 @@ async def post_config_restart(request: Request) -> JSONResponse:
 
     write_env_files(config)
     await restart_services(config)
+
+    # On dev machines where systemctl is unavailable the process is not restarted,
+    # so reload the manager in-place so the new config takes effect immediately.
+    # On production the process is killed by systemctl before reaching this point.
+    await manager.shutdown()
+    await manager.startup(config)
+    request.app.state.manager = manager
+    request.app.state.config = config
 
     return JSONResponse(content={"status": "ok"})
 
