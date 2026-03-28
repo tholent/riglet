@@ -62,12 +62,14 @@ class RadioInstance:
         self.id = radio_id
         self.config = config
 
+        # Simulation is explicit: driven by config.type, not connection failure.
+        self.simulation: bool = config.type == "simulated"
+
         # Public state
         self.freq: float = 14.074  # MHz — reasonable default (FT8 20m)
         self.mode: str = "USB"
         self.ptt: bool = False
         self.online: bool = False
-        self.simulation: bool = False
         self.rx_volume: int = 50
         self.tx_gain: int = 50
         self.nr_level: int = 0
@@ -90,7 +92,11 @@ class RadioInstance:
     # ------------------------------------------------------------------
 
     async def connect_rigctld(self) -> bool:
-        """Open TCP connection to rigctld.  Returns True on success."""
+        """Open TCP connection to rigctld.  Returns True on success.
+
+        On failure, sets online=False.  Does NOT set simulation=True —
+        an unreachable rigctld on a real radio is an error/offline state.
+        """
         try:
             reader, writer = await asyncio.open_connection(
                 "localhost", self.config.rigctld_port
@@ -98,7 +104,6 @@ class RadioInstance:
             self._reader = reader
             self._writer = writer
             self.online = True
-            self.simulation = False
             logger.info(
                 "Connected to rigctld for radio %s on port %d",
                 self.id,
@@ -106,14 +111,14 @@ class RadioInstance:
             )
             return True
         except Exception as exc:
-            logger.warning(
-                "Cannot connect to rigctld for radio %s (port %d): %s — simulation mode",
+            logger.error(
+                "Cannot connect to rigctld for radio %s (port %d): %s — radio offline",
                 self.id,
                 self.config.rigctld_port,
                 exc,
             )
             self.online = False
-            self.simulation = True
+            # Do NOT set simulation=True for real radios on connection failure.
             return False
 
     async def disconnect(self) -> None:
@@ -317,6 +322,8 @@ class RadioInstance:
         while True:
             try:
                 if not self.online and not self.simulation:
+                    # Real radio that is offline — attempt reconnect periodically.
+                    # Never generate fake data for real radios.
                     now = loop.time()
                     if now - self._last_reconnect_attempt >= reconnect_interval:
                         self._last_reconnect_attempt = now
@@ -367,16 +374,21 @@ class RadioManager:
     async def startup(self, config: RigletConfig) -> None:
         """Create, connect, and start polling for each configured radio.
 
-        Disabled radios still get an instance (simulation mode) so the UI
-        has something to connect to without real hardware.
+        Simulated radios (type == "simulated") start online immediately with
+        fake data.  Real radios (type == "real") attempt a rigctld connection;
+        on failure they start offline/error — they do NOT silently simulate.
+        Disabled real radios start offline without attempting a connection.
         """
         self.config = config
         for radio_cfg in config.radios:
             instance = RadioInstance(radio_cfg.id, radio_cfg)
-            if radio_cfg.enabled:
+            if radio_cfg.type == "simulated":
+                # Explicit simulation: online from the start, no rigctld needed.
+                instance.online = True
+            elif radio_cfg.enabled:
+                # Real radio that is enabled: try to connect.
                 await instance.connect_rigctld()
-            else:
-                instance.simulation = True
+            # else: real radio, disabled — stays offline (online=False, simulation=False)
             await instance.start_polling()
             self.radios[radio_cfg.id] = instance
         logger.info(
@@ -404,6 +416,7 @@ class RadioManager:
             {
                 "id": inst.id,
                 "name": inst.config.name,
+                "type": inst.config.type,
                 "online": inst.online,
                 "simulation": inst.simulation,
                 "freq": inst.freq,

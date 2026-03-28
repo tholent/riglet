@@ -34,14 +34,39 @@
 	function jumpToBand(band: Band) {
 		controlWs?.send({ type: 'freq', freq: band.defaultMhz });
 	}
+
+	function onBandKeydown(e: KeyboardEvent, band: Band, index: number) {
+		if (e.key === 'Enter' || e.key === ' ') {
+			e.preventDefault();
+			jumpToBand(band);
+		} else if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+			e.preventDefault();
+			const next = BANDS[index + 1];
+			if (next) {
+				const el = document.querySelector<HTMLButtonElement>(`[data-band="${next.label}"]`);
+				el?.focus();
+			}
+		} else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+			e.preventDefault();
+			const prev = BANDS[index - 1];
+			if (prev) {
+				const el = document.querySelector<HTMLButtonElement>(`[data-band="${prev.label}"]`);
+				el?.focus();
+			}
+		}
+	}
 </script>
 
-<div class="band-selector">
-	{#each BANDS as band}
+<div class="band-selector" role="group" aria-label="Band selector">
+	{#each BANDS as band, i}
 		<button
 			class="band-pill"
 			class:active={isActive(band)}
 			onclick={() => jumpToBand(band)}
+			onkeydown={(e) => onBandKeydown(e, band, i)}
+			aria-label={`${band.label} band (${band.rangeLow}–${band.rangeHigh} MHz)`}
+			aria-pressed={isActive(band)}
+			data-band={band.label}
 		>
 			{band.label}
 		</button>
@@ -77,5 +102,16 @@
 	.band-pill.active {
 		border-color: #4a9eff;
 		color: #4a9eff;
+	}
+
+	.band-pill:focus-visible {
+		outline: 2px solid #4a9eff;
+		outline-offset: 2px;
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.band-pill {
+			transition: none;
+		}
 	}
 </style>

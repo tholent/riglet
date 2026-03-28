@@ -4,17 +4,22 @@
  * and speaker output for one radio.
  *
  * DSP chain (RX path):
- *   workletNode -> squelchGate -> volumeGain -> destination
+ *   workletNode -> bandpass -> notch -> compressor -> bass -> mid -> treble -> squelchGate -> volumeGain -> destination
  *
  * The squelch gate is implemented as a gain node whose value is snapped
  * to 0 (closed) or 1 (open) based on the RMS level of incoming PCM chunks
  * relative to the squelch threshold.  A simple hold timer prevents rapid
  * open/close chatter.
  *
+ * All DSP filter/EQ/compressor nodes are managed by DspChain and are
+ * bypassed by default.
+ *
  * Integration:
  *   - Call feedRx(buffer) from the audio WebSocket binary message handler.
  *   - Set onTxChunk callback to forward captured TX audio to the WebSocket.
  */
+
+import { DspChain } from './dsp-chain.js';
 
 /** Configuration for the squelch audio gate. */
 export interface SquelchParams {
@@ -35,6 +40,9 @@ export class AudioManager {
 
 	// Squelch gate gain node (0 = muted, 1 = open)
 	private squelchNode: GainNode | null = null;
+
+	// DSP filter/EQ/compressor chain
+	private dspChain: DspChain | null = null;
 
 	private micStream: MediaStream | null = null;
 	private micSource: MediaStreamAudioSourceNode | null = null;
@@ -79,8 +87,14 @@ export class AudioManager {
 			}
 		};
 
-		// Wire up DSP chain: worklet -> squelch -> volume -> speakers
-		this.workletNode.connect(this.squelchNode);
+		// Build DSP filter/EQ/compressor chain
+		this.dspChain = new DspChain(this.audioCtx);
+		this.dspChain.build();
+
+		// Wire up full DSP chain:
+		// worklet -> bandpass -> notch -> compressor -> bass -> mid -> treble -> squelch -> volume -> speakers
+		this.workletNode.connect(this.dspChain.input);
+		this.dspChain.output.connect(this.squelchNode);
 		this.squelchNode.connect(this.gainNode);
 		this.gainNode.connect(this.audioCtx.destination);
 	}
@@ -90,6 +104,8 @@ export class AudioManager {
 			clearTimeout(this.squelchHoldTimer);
 			this.squelchHoldTimer = null;
 		}
+		this.dspChain?.destroy();
+		this.dspChain = null;
 		this.gainNode?.disconnect();
 		this.squelchNode?.disconnect();
 		this.workletNode?.disconnect();
@@ -98,6 +114,16 @@ export class AudioManager {
 		this.workletNode = null;
 		this.gainNode = null;
 		this.squelchNode = null;
+	}
+
+	// ------------------------------------------------------------------
+	// DSP chain access
+	// ------------------------------------------------------------------
+
+	/** Returns the DSP chain for filter/EQ/compressor control.
+	 *  Returns null if RX is not started yet. */
+	getDspChain(): DspChain | null {
+		return this.dspChain;
 	}
 
 	async startTx(): Promise<void> {

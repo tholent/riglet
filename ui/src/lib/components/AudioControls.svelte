@@ -35,9 +35,47 @@
 		muted = !muted;
 		audioManager?.setVolume(muted ? 0 : localRx / 100);
 	}
+
+	function onRxKeydown(e: KeyboardEvent) {
+		const step = 5;
+		if (e.key === 'ArrowRight' || e.key === 'ArrowUp') {
+			e.preventDefault();
+			localRx = Math.min(100, localRx + step);
+			audioManager?.setVolume(muted ? 0 : localRx / 100);
+		} else if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') {
+			e.preventDefault();
+			localRx = Math.max(0, localRx - step);
+			audioManager?.setVolume(muted ? 0 : localRx / 100);
+		} else if (e.key === 'Home') {
+			e.preventDefault();
+			localRx = 0;
+			audioManager?.setVolume(0);
+		} else if (e.key === 'End') {
+			e.preventDefault();
+			localRx = 100;
+			audioManager?.setVolume(muted ? 0 : 1);
+		}
+	}
+
+	function onTxKeydown(e: KeyboardEvent) {
+		const step = 5;
+		if (e.key === 'ArrowRight' || e.key === 'ArrowUp') {
+			e.preventDefault();
+			localTx = Math.min(100, localTx + step);
+		} else if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') {
+			e.preventDefault();
+			localTx = Math.max(0, localTx - step);
+		} else if (e.key === 'Home') {
+			e.preventDefault();
+			localTx = 0;
+		} else if (e.key === 'End') {
+			e.preventDefault();
+			localTx = 100;
+		}
+	}
 </script>
 
-<div class="audio-controls">
+<div class="audio-controls" role="group" aria-label="Audio controls">
 	<div class="row">
 		<label>
 			<span>RX Vol</span>
@@ -47,10 +85,21 @@
 				max="100"
 				bind:value={localRx}
 				oninput={() => audioManager?.setVolume(muted ? 0 : localRx / 100)}
+				onkeydown={onRxKeydown}
+				aria-label="Receive volume"
+				aria-valuenow={localRx}
+				aria-valuemin={0}
+				aria-valuemax={100}
 			/>
-			<span class="val">{localRx}</span>
+			<span class="val" aria-hidden="true">{localRx}</span>
 		</label>
-		<button class="mute-btn" class:muted onclick={toggleMute} aria-label={muted ? 'Unmute' : 'Mute'}>
+		<button
+			class="mute-btn"
+			class:muted
+			onclick={toggleMute}
+			aria-label={muted ? 'Unmute audio' : 'Mute audio'}
+			aria-pressed={muted}
+		>
 			{muted ? '🔇' : '🔊'}
 		</button>
 	</div>
@@ -58,8 +107,18 @@
 	<div class="row">
 		<label>
 			<span>TX Gain</span>
-			<input type="range" min="0" max="100" bind:value={localTx} />
-			<span class="val">{localTx}</span>
+			<input
+				type="range"
+				min="0"
+				max="100"
+				bind:value={localTx}
+				onkeydown={onTxKeydown}
+				aria-label="Transmit gain"
+				aria-valuenow={localTx}
+				aria-valuemin={0}
+				aria-valuemax={100}
+			/>
+			<span class="val" aria-hidden="true">{localTx}</span>
 		</label>
 	</div>
 
@@ -99,6 +158,11 @@
 		accent-color: #4a9eff;
 	}
 
+	input[type="range"]:focus-visible {
+		outline: 2px solid #4a9eff;
+		outline-offset: 2px;
+	}
+
 	.val {
 		min-width: 28px;
 		text-align: right;
@@ -113,6 +177,11 @@
 		padding: 4px 8px;
 		cursor: pointer;
 		font-size: 1rem;
+	}
+
+	.mute-btn:focus-visible {
+		outline: 2px solid #4a9eff;
+		outline-offset: 2px;
 	}
 
 	.mute-btn.muted {
@@ -132,4 +201,9 @@
 
 	.save-btn:hover:not(:disabled) { background: #333; }
 	.save-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+	.save-btn:focus-visible {
+		outline: 2px solid #4a9eff;
+		outline-offset: 2px;
+	}
 </style>

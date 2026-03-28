@@ -124,7 +124,7 @@ Riglet provides multiple visualization modes, all driven from the same audio/FFT
 | **Oscilloscope** | Time-domain waveform | Time (horizontal) vs. Amplitude (vertical) |
 | **Constellation / Goniometer** | X-Y plot comparing two audio channels (I/Q or L/R) | Channel 1 vs. Channel 2 |
 | **Phase / Correlation meter** | Phase relationship between channels | Correlation coefficient display |
-| **3D waterfall** | Frequency-time-amplitude in perspective view | Frequency, Time, Amplitude (research patent status first) |
+| **3D spectrogram** | Frequency-time-amplitude in perspective view | Frequency (horizontal), Time (depth), Amplitude (vertical) |
 | **LUFS audio meter** | Real-time audio meter (Loudness Units Full Scale) | Perceived amplitude (vertical) |
 
 ### Always-Visible Elements
@@ -374,7 +374,7 @@ v0.1.0 delivered:
 
 Building on v0.1.0, v0.2.0 expands Riglet into its full vision:
 
-1. **Multiple visualization modes**: Spectrum scope, oscilloscope, constellation diagram, phase meter (waterfall already exists)
+1. **Multiple visualization modes**: Spectrum scope, oscilloscope, constellation diagram, phase meter, 3D spectrogram (waterfall already exists)
 2. **LUFS audio metering** with peak hold, always visible
 3. **Waterfall cursor**: Mode-aware passband overlay, draggable for frequency tuning
 4. **Client-side DSP**: Notch filter, bandpass, noise reduction, compression, 3-band EQ
@@ -399,7 +399,6 @@ Building on v0.1.0, v0.2.0 expands Riglet into its full vision:
 - Mobile app
 - Logging / QSO database integration
 - Riglet Snout hardware
-- 3D waterfall (pending patent research)
 - Hardware dial integration (design for it, but do not implement)
 
 ---
@@ -414,7 +413,7 @@ Building on v0.1.0, v0.2.0 expands Riglet into its full vision:
 | WSJT-X and Riglet both control same radio | Low | Each radio has a dedicated rigctld port. WSJT-X connects to its own port. No conflict by design. |
 | Setup wizard unreachable on first boot | Low | avahi-daemon starts early. Fallback: document IP discovery via router DHCP table. |
 | Client-side DSP performance varies | Medium | Web Audio API is hardware-accelerated on most browsers. Provide a "disable DSP" toggle. Test on low-end hardware. |
-| 3D waterfall patent encumbrance | Unknown | Research before implementing. Keep as deferred/optional feature. |
+| 3D spectrogram WebGL performance on low-end clients | Medium | Use lightweight WebGL (e.g., Three.js or raw WebGL2). Provide a fallback 2D mode. Test on integrated GPUs. |
 | VOX hot-mic in noisy environments | Medium | Require an audio gate threshold before VOX engages. Make threshold configurable. Default to PTT-only mode. |
 | Browser scroll-wheel hijacking page scroll | Low | Only capture scroll events when pointer is directly over a dial control. Use passive event listeners elsewhere. |
 

@@ -12,10 +12,24 @@
 		if (index >= 6) return '#ff9800'; // S6-S8 -> orange
 		return '#4caf50';                  // S1-S5 -> green
 	}
+
+	function readingLabel(s: number): string {
+		if (s >= 9) return `S9 +${(s - 9) * 10} dB`;
+		if (s > 0) return `S${s}`;
+		return 'S0';
+	}
 </script>
 
-<div class="smeter">
-	<div class="bars">
+<div
+	class="smeter"
+	role="meter"
+	aria-label="Signal strength meter"
+	aria-valuenow={smeter}
+	aria-valuemin={0}
+	aria-valuemax={BAR_COUNT}
+	aria-valuetext={readingLabel(smeter)}
+>
+	<div class="bars" aria-hidden="true">
 		{#each S_LABELS as label, i}
 			<div class="bar-col">
 				<div
@@ -27,12 +41,8 @@
 			</div>
 		{/each}
 	</div>
-	<div class="reading">
-		{smeter >= 9
-			? `S9 +${(smeter - 9) * 10} dB`
-			: smeter > 0
-				? `S${smeter}`
-				: 'S0'}
+	<div class="reading" aria-live="polite" aria-atomic="true">
+		{readingLabel(smeter)}
 	</div>
 </div>
 
@@ -77,5 +87,11 @@
 		color: #4caf50;
 		text-align: right;
 		padding-right: 4px;
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.bar {
+			transition: none;
+		}
 	}
 </style>

@@ -5,7 +5,7 @@
 	import { radioState, appConfig } from '$lib/stores.js';
 	import { ControlWebSocket, AudioWebSocket } from '$lib/websocket.js';
 	import { AudioManager } from '$lib/audio/audio-manager.js';
-	import Waterfall from '$lib/components/Waterfall.svelte';
+	import VisualizationPanel from '$lib/components/VisualizationPanel.svelte';
 	import FrequencyDisplay from '$lib/components/FrequencyDisplay.svelte';
 	import BandSelector from '$lib/components/BandSelector.svelte';
 	import ModeSelector from '$lib/components/ModeSelector.svelte';
@@ -117,57 +117,86 @@
 	<title>Riglet — {state.name || 'Radio'}</title>
 </svelte:head>
 
+<!-- Skip to content link for keyboard users -->
+<a href="#main-content" class="skip-link">Skip to main content</a>
+
 <div class="app">
-	<header class="topbar">
+	<header class="topbar" role="banner">
 		<span class="brand">Riglet</span>
 		{#if state.name}
 			<span class="radio-name">{state.name}</span>
 		{/if}
-		<span class="status-pill" class:online={state.online} class:offline={!state.online}>
+		<span
+			class="status-pill"
+			class:online={state.online}
+			class:offline={!state.online}
+			role="status"
+			aria-live="polite"
+			aria-label={`Radio ${state.online ? (state.simulation ? 'simulation mode' : 'online') : 'offline'}`}
+		>
 			{state.online ? (state.simulation ? 'SIM' : 'ONLINE') : 'OFFLINE'}
 		</span>
 	</header>
 
-	{#if radioId}
-		<div class="main-grid">
-			<!-- Left column: freq controls + waterfall -->
-			<section class="waterfall-col">
-				<div class="radio-header">
-					<ModeSelector mode={state.mode} {controlWs} />
-					<FrequencyDisplay freq={state.freq} {controlWs} />
-					<BandSelector {controlWs} currentFreq={state.freq} />
-				</div>
-				<Waterfall {radioId} />
-			</section>
+	<main id="main-content" tabindex="-1">
+		{#if radioId}
+			<div class="main-grid">
+				<!-- Left column: freq controls + waterfall -->
+				<section class="waterfall-col" aria-label="Frequency and waterfall">
+					<div class="radio-header">
+						<ModeSelector mode={state.mode} {controlWs} />
+						<FrequencyDisplay freq={state.freq} {controlWs} />
+						<BandSelector {controlWs} currentFreq={state.freq} />
+					</div>
+					<VisualizationPanel mode="waterfall" {radioId} />
+				</section>
 
-			<!-- Right column: controls -->
-			<section class="controls-col">
-				<div class="control-block">
-					<PttButton ptt={state.ptt} {controlWs} />
-				</div>
+				<!-- Right column: controls -->
+				<section class="controls-col" aria-label="Radio controls">
+					<div class="control-block">
+						<PttButton ptt={state.ptt} {controlWs} />
+					</div>
 
-				<div class="control-block">
-					<SmeterDisplay smeter={state.smeter ?? 0} />
-				</div>
+					<div class="control-block">
+						<SmeterDisplay smeter={state.smeter ?? 0} />
+					</div>
 
-				<div class="control-block">
-					<AudioControls
-						{radioId}
-						{rxVolume}
-						{txGain}
-						audioManager={audioMgr}
-					/>
-				</div>
-			</section>
-		</div>
-	{:else}
-		<div class="no-radio">
-			<p>No radio configured. <a href="/setup">Run setup wizard</a></p>
-		</div>
-	{/if}
+					<div class="control-block">
+						<AudioControls
+							{radioId}
+							{rxVolume}
+							{txGain}
+							audioManager={audioMgr}
+						/>
+					</div>
+				</section>
+			</div>
+		{:else}
+			<div class="no-radio">
+				<p>No radio configured. <a href="/setup">Run setup wizard</a></p>
+			</div>
+		{/if}
+	</main>
 </div>
 
 <style>
+	.skip-link {
+		position: absolute;
+		top: -100%;
+		left: 0;
+		background: #4a9eff;
+		color: #000;
+		padding: 8px 16px;
+		font-weight: 700;
+		z-index: 9999;
+		text-decoration: none;
+		border-radius: 0 0 4px 0;
+	}
+
+	.skip-link:focus {
+		top: 0;
+	}
+
 	:global(body) {
 		margin: 0;
 		background: #0d0d0d;
@@ -225,6 +254,18 @@
 		border-bottom: 1px solid #222;
 	}
 
+	main {
+		flex: 1;
+		min-height: 0;
+		overflow: hidden;
+		display: flex;
+		flex-direction: column;
+	}
+
+	main:focus {
+		outline: none;
+	}
+
 	.main-grid {
 		display: grid;
 		grid-template-columns: 1fr 360px;
@@ -267,4 +308,13 @@
 	}
 
 	.no-radio a { color: #4a9eff; }
+
+	@media (prefers-reduced-motion: reduce) {
+		/* Disable any page-level transitions/animations */
+		* {
+			animation-duration: 0.01ms !important;
+			animation-iteration-count: 1 !important;
+			transition-duration: 0.01ms !important;
+		}
+	}
 </style>

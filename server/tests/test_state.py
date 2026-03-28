@@ -43,14 +43,14 @@ def make_riglet_config(radios: list[RadioConfig] | None = None) -> RigletConfig:
 
 
 @pytest.mark.asyncio
-async def test_connect_rigctld_no_server_sets_simulation() -> None:
-    """connect_rigctld() when nothing is listening → simulation=True, online=False."""
+async def test_connect_rigctld_no_server_sets_offline() -> None:
+    """connect_rigctld() with no server → online=False, simulation=False (error state)."""
     cfg = make_radio_config(rigctld_port=19999)
     radio = RadioInstance("r1", cfg)
     result = await radio.connect_rigctld()
 
     assert result is False
-    assert radio.simulation is True
+    assert radio.simulation is False
     assert radio.online is False
 
 
@@ -168,14 +168,15 @@ async def test_radio_manager_get_nonexistent_raises_key_error() -> None:
 
 
 @pytest.mark.asyncio
-async def test_radio_manager_startup_disabled_radio_added_as_simulation() -> None:
-    """Disabled radios are added as simulation instances so the UI can connect."""
+async def test_radio_manager_startup_disabled_radio_added_as_offline() -> None:
+    """Disabled real radios are added as offline instances (not simulated)."""
     cfg = make_radio_config(radio_id="r1", enabled=False)
     config = make_riglet_config(radios=[cfg])
     manager = RadioManager()
     await manager.startup(config)
     assert "r1" in manager.radios
-    assert manager.radios["r1"].simulation is True
+    assert manager.radios["r1"].simulation is False
+    assert manager.radios["r1"].online is False
     await manager.shutdown()
 
 

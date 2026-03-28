@@ -7,10 +7,6 @@
 	}
 	let { ptt, controlWs }: Props = $props();
 
-	function toggle() {
-		controlWs?.send({ type: 'ptt', active: !ptt });
-	}
-
 	// Support press-and-hold: send PTT on pointerdown, release on pointerup
 	function onPointerDown(e: PointerEvent) {
 		(e.target as HTMLElement).setPointerCapture(e.pointerId);
@@ -20,6 +16,13 @@
 	function onPointerUp() {
 		if (ptt) controlWs?.send({ type: 'ptt', active: false });
 	}
+
+	function onKeydown(e: KeyboardEvent) {
+		if (e.key === ' ' || e.key === 'Enter') {
+			e.preventDefault();
+			controlWs?.send({ type: 'ptt', active: !ptt });
+		}
+	}
 </script>
 
 <div class="ptt-wrap">
@@ -28,13 +31,15 @@
 		class:active={ptt}
 		onpointerdown={onPointerDown}
 		onpointerup={onPointerUp}
-		aria-label={ptt ? 'Transmitting — click to release PTT' : 'Push to Talk'}
+		onkeydown={onKeydown}
+		aria-label={ptt ? 'Transmitting — press to release PTT' : 'Push to Talk — press and hold to transmit'}
 		aria-pressed={ptt}
+		role="button"
 	>
 		{ptt ? 'TX' : 'PTT'}
 	</button>
 	{#if ptt}
-		<span class="tx-indicator">TRANSMITTING</span>
+		<span class="tx-indicator" aria-live="assertive" aria-atomic="true">TRANSMITTING</span>
 	{/if}
 </div>
 
@@ -66,6 +71,11 @@
 		color: #fff;
 	}
 
+	.ptt-btn:focus-visible {
+		outline: 3px solid #4a9eff;
+		outline-offset: 3px;
+	}
+
 	.ptt-btn.active {
 		background: #c62828;
 		border-color: #ef5350;
@@ -84,5 +94,14 @@
 	@keyframes blink {
 		0%, 100% { opacity: 1; }
 		50% { opacity: 0; }
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.ptt-btn {
+			transition: none;
+		}
+		.tx-indicator {
+			animation: none;
+		}
 	}
 </style>

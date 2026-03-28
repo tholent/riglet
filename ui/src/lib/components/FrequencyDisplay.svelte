@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { ControlWebSocket } from '$lib/websocket.js';
+	import { scrollWheel } from '$lib/actions/scrollwheel.js';
 
 	interface Props {
 		freq: number;
@@ -14,10 +15,9 @@
 	// E.g. 14.2 -> "14.200.000", 7.03815 -> "7.038.150", 146.52 -> "146.520.000"
 	function formatFreq(mhz: number): string {
 		const hz = Math.round(mhz * 1_000_000);
-		// Split into three groups from the right: ones+tens+hundreds (kHz sub), kHz, MHz
-		const sub   = hz % 1000;           // 0–999
-		const khz   = Math.floor(hz / 1000) % 1000; // 0–999
-		const mhzPart = Math.floor(hz / 1_000_000);  // leading group, no zero-pad
+		const sub   = hz % 1000;
+		const khz   = Math.floor(hz / 1000) % 1000;
+		const mhzPart = Math.floor(hz / 1_000_000);
 		return `${mhzPart}.${String(khz).padStart(3, '0')}.${String(sub).padStart(3, '0')}`;
 	}
 
@@ -42,10 +42,32 @@
 	function nudge(direction: 1 | -1) {
 		controlWs?.send({ type: 'nudge', direction });
 	}
+
+	function onDisplayKeydown(e: KeyboardEvent) {
+		if (e.key === 'Enter' || e.key === ' ') {
+			e.preventDefault();
+			startEdit();
+		} else if (e.key === 'ArrowUp') {
+			e.preventDefault();
+			nudge(1);
+		} else if (e.key === 'ArrowDown') {
+			e.preventDefault();
+			nudge(-1);
+		}
+	}
 </script>
 
-<div class="freq-row">
-	<button class="nudge" onclick={() => nudge(-1)} aria-label="Tune down 1 kHz">−</button>
+<div
+	class="freq-row"
+	role="group"
+	aria-label="Frequency control"
+	use:scrollWheel={{ onDelta: (d) => nudge(d as 1 | -1) }}
+>
+	<button
+		class="nudge"
+		onclick={() => nudge(-1)}
+		aria-label="Tune down 1 kHz"
+	>−</button>
 
 	{#if editing}
 		<!-- svelte-ignore a11y_autofocus -->
@@ -56,14 +78,26 @@
 			bind:value={editValue}
 			onblur={commitEdit}
 			onkeydown={onKeydown}
+			aria-label="Enter frequency in MHz"
 		/>
 	{:else}
-		<button class="freq-display" onclick={startEdit} aria-label="Click to edit frequency">
+		<button
+			class="freq-display"
+			onclick={startEdit}
+			onkeydown={onDisplayKeydown}
+			aria-label={`Frequency ${formatFreq(freq)} MHz. Press Enter to edit, arrow keys to nudge.`}
+			aria-live="polite"
+			aria-atomic="true"
+		>
 			{formatFreq(freq)}<span class="unit"> MHz</span>
 		</button>
 	{/if}
 
-	<button class="nudge" onclick={() => nudge(1)} aria-label="Tune up 1 kHz">+</button>
+	<button
+		class="nudge"
+		onclick={() => nudge(1)}
+		aria-label="Tune up 1 kHz"
+	>+</button>
 </div>
 
 <style>
@@ -90,6 +124,11 @@
 
 	.freq-display:hover {
 		border-color: #4a9eff;
+	}
+
+	.freq-display:focus-visible {
+		outline: 2px solid #4a9eff;
+		outline-offset: 2px;
 	}
 
 	.unit {
@@ -129,4 +168,15 @@
 	}
 
 	.nudge:hover { background: #2a2a2a; border-color: #666; }
+
+	.nudge:focus-visible {
+		outline: 2px solid #4a9eff;
+		outline-offset: 2px;
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.nudge, .freq-display {
+			transition: none;
+		}
+	}
 </style>
