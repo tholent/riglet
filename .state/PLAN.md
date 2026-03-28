@@ -11,42 +11,41 @@
 
 | # | Task | Priority | Agent | Status | Depends On | Notes |
 |:--|:-----|:---------|:------|:-------|:-----------|:------|
-| 1 | Region-aware band plan data module | P0 | @developer | [~] in-process | -- | Backend + frontend data |
-| 2 | Config schema: operator.region, radio.type, radio.bands, presets | P0 | @developer | [~] in-process | -- | Pydantic models + validation |
-| 3 | Config schema frontend types | P0 | @developer | [~] in-process | 2 | TypeScript types match new schema |
-| 4 | Explicit simulation radio type | P0 | @developer | [~] in-process | 2 | RadioInstance type-aware behavior |
+| 1 | Region-aware band plan data module | P0 | @developer | [x] complete | -- | Backend + frontend data |
+| 2 | Config schema: operator.region, radio.type, radio.bands, presets | P0 | @developer | [x] complete | -- | Pydantic models + validation |
+| 3 | Config schema frontend types | P0 | @developer | [x] complete | 2 | TypeScript types match new schema |
+| 4 | Explicit simulation radio type | P0 | @developer | [x] complete | 2 | RadioInstance type-aware behavior |
 | 5 | Extended CAT: VFO, SWR, CTCSS | P1 | @developer | [x] complete | 4 | New rigctld commands in state.py + cat router |
 | 6 | Curated mode list per radio | P1 | @developer | [x] complete | 5 | Hamlib model -> mode list mapping |
-| 7 | Frequency presets API | P1 | @developer | [~] in-process | 2 | REST CRUD for presets in config |
-| 8 | Band plan API endpoint | P1 | @developer | [~] in-process | 1 | GET /api/bandplan |
-| 9 | Theme infrastructure (CSS custom properties) | P0 | @developer | [~] in-process | -- | Light/dark theme system |
-| 10 | Accessibility foundation | P0 | @developer | [~] in-process | 9 | ARIA roles, keyboard nav, skip links |
-| 11 | Scroll-wheel mixin for dial controls | P1 | @developer | [~] in-process | 10 | Reusable Svelte action |
-| 12 | Visualization renderer interface | P0 | @developer | [~] in-process | -- | Pluggable canvas renderer abstraction |
+| 7 | Frequency presets API | P1 | @developer | [x] complete | 2 | REST CRUD for presets in config |
+| 8 | Band plan API endpoint | P1 | @developer | [x] complete | 1 | GET /api/bandplan |
+| 9 | Theme infrastructure (CSS custom properties) | P0 | @developer | [x] complete | -- | Light/dark theme system |
+| 10 | Accessibility foundation | P0 | @developer | [x] complete | 9 | ARIA roles, keyboard nav, skip links |
+| 11 | Scroll-wheel mixin for dial controls | P1 | @developer | [x] complete | 10 | Reusable Svelte action |
+| 12 | Visualization renderer interface | P0 | @developer | [x] complete | -- | Pluggable canvas renderer abstraction |
 | 13 | Refactor Waterfall to use renderer interface | P0 | @developer | [x] complete | 12 | Migrate existing waterfall |
 | 14 | Spectrum scope renderer | P1 | @developer | [x] complete | 12 | Freq vs amplitude overlay |
 | 15 | Oscilloscope renderer | P1 | @developer | [x] complete | 12 | Time-domain waveform |
-| 16 | Constellation renderer | P2 | @developer | [~] in-process | 12 | X-Y plot for I/Q or L/R |
-| 17 | Phase/correlation meter renderer | P2 | @developer | [~] in-process | 12 | Correlation coefficient display |
-| 41 | 3D spectrogram renderer | P1 | @developer | [~] in-process | 12 | WebGL freq-time-amplitude perspective view |
-| 18 | Visualization mode switcher UI | P1 | @developer | [~] in-process | 13, 14 | Toggle between visualization modes |
-| 19 | LUFS audio meter component | P1 | @developer | [~] in-process | 12 | Always-visible meter with peak hold |
-| 20 | Waterfall cursor (passband overlay) | P1 | @developer | [~] in-process | 13, 6 | Mode-aware passband highlight |
-
+| 16 | Constellation renderer | P2 | @developer | [x] complete | 12 | X-Y plot for I/Q or L/R |
+| 17 | Phase/correlation meter renderer | P2 | @developer | [x] complete | 12 | Correlation coefficient display |
+| 41 | 3D spectrogram renderer | P1 | @developer | [x] complete | 12 | WebGL freq-time-amplitude perspective view |
+| 18 | Visualization mode switcher UI | P1 | @developer | [x] complete | 13, 14 | Toggle between visualization modes |
+| 19 | LUFS audio meter component | P1 | @developer | [x] complete | 12 | User-toggleable meter with peak hold |
+| 20 | Waterfall cursor (passband overlay) | P1 | @developer | [x] complete | 13, 6 | Mode-aware passband highlight |
 | 21 | Waterfall cursor drag-to-tune | P1 | @developer | [x] complete | 20 | Dragging cursor changes frequency |
-| 22 | Client-side DSP: volume + squelch nodes | P0 | @developer | [~] in-process | -- | Web Audio API gain + gate in AudioManager |
+| 22 | Client-side DSP: volume + squelch nodes | P0 | @developer | [x] complete | -- | Web Audio API gain + gate in AudioManager |
 | 23 | Client-side DSP: bandpass + notch filters | P1 | @developer | [x] complete | 22 | BiquadFilterNode chain |
-| 24 | Client-side DSP: noise reduction worklet | P2 | @developer | [~] in-process | 22 | Spectral subtraction AudioWorklet |
+| 24 | Client-side DSP: noise reduction worklet | P2 | @developer | [x] complete | 22 | Spectral subtraction AudioWorklet |
 | 25 | Client-side DSP: compressor + 3-band EQ | P1 | @developer | [x] complete | 22 | DynamicsCompressorNode + 3x BiquadFilter |
-| 26 | DSP controls panel component | P1 | @developer | [~] in-process | 23, 25 | UI for all DSP parameters |
-| 27 | TX visualization switching | P1 | @developer | [~] in-process | 12, 22 | Show TX audio in active viz during PTT |
-| 28 | VOX mode with hot-mic prevention | P1 | @developer | [~] in-process | 22 | Audio gate threshold + hang timer |
-| 29 | Region-aware BandSelector component | P1 | @developer | [~] in-process | 1, 3 | All region bands; greyed for non-enabled |
-| 30 | Frequency presets UI | P1 | @developer | [~] in-process | 7, 29 | Preset selector + label in freq display |
+| 26 | DSP controls panel component | P1 | @developer | [x] complete | 23, 25 | UI for all DSP parameters |
+| 27 | TX visualization switching | P1 | @developer | [x] complete | 12, 22 | Show TX audio in active viz during PTT |
+| 28 | VOX mode with hot-mic prevention | P1 | @developer | [x] complete | 22 | Audio gate threshold + hang timer |
+| 29 | Region-aware BandSelector component | P1 | @developer | [x] complete | 1, 3 | All region bands; greyed for non-enabled |
+| 30 | Frequency presets UI | P1 | @developer | [x] complete | 7, 29 | Preset selector + label in freq display |
 | 31 | Layout system: schema + persistence | P1 | @developer | [x] complete | 18 | JSON layout configs in localStorage |
 | 32 | Layout system: save/load/export/import UI | P1 | @developer | [x] complete | 31 | Layout management panel |
 | 33 | Main page layout refactor for configurable panels | P1 | @developer | [x] complete | 31 | Dynamic grid from layout config |
-| 34 | Virtual device passthrough documentation | P2 | @developer | [~] in-process | -- | Docs + helper scripts |
+| 34 | Virtual device passthrough documentation | P2 | @developer | [x] complete | -- | Docs + helper scripts |
 | 35 | Extended CAT frontend controls (VFO, SWR, CTCSS) | P1 | @developer | [x] complete | 5, 10 | UI for new CAT features |
 | 36 | ModeSelector curated mode support | P1 | @developer | [x] complete | 6, 3 | Filter modes per radio capability |
 | 37 | Backend tests: band plan, presets, config schema | P0 | @tester | [x] complete | 1, 2, 7 | pytest for new backend features |
@@ -892,7 +891,7 @@ _Addresses critical and high-severity findings from the v0.2.0 readiness audit (
 
 ### Task 42 — Wire VizSwitcher into main page
 
-**Status:** TODO
+**Status:** COMPLETE
 **Files:** `ui/src/routes/+page.svelte`
 
 **Work:**
@@ -907,7 +906,7 @@ _Addresses critical and high-severity findings from the v0.2.0 readiness audit (
 
 ### Task 43 — Connect TX visualization
 
-**Status:** TODO
+**Status:** COMPLETE
 **Files:** `ui/src/routes/+page.svelte`
 
 **Work:**
@@ -921,7 +920,7 @@ _Addresses critical and high-severity findings from the v0.2.0 readiness audit (
 
 ### Task 44 — Update config.yaml.default
 
-**Status:** TODO
+**Status:** COMPLETE
 **Files:** `deployment/files/config.yaml.default`
 
 **Work:**
@@ -934,7 +933,7 @@ _Addresses critical and high-severity findings from the v0.2.0 readiness audit (
 
 ### Task 45 — Validate VFO input in cat.py
 
-**Status:** TODO
+**Status:** COMPLETE
 **Files:** `server/routers/cat.py`
 
 **Work:**
@@ -948,7 +947,7 @@ _Addresses critical and high-severity findings from the v0.2.0 readiness audit (
 
 ### Task 46 — Fix stale OVERVIEW.md documentation
 
-**Status:** TODO
+**Status:** COMPLETE
 **Files:** `.state/OVERVIEW.md`
 
 **Work:**
