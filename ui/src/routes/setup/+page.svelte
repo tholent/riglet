@@ -18,10 +18,11 @@
 
 	// Local working copy of config built up through wizard
 	let config = $state<RigletConfig>({
-		operator: { callsign: '', grid: '' },
+		operator: { callsign: '', grid: '', region: 'us' },
 		network: { hostname: 'riglet', http_port: 8080 },
 		audio: { sample_rate: 16000, chunk_ms: 20 },
 		radios: [],
+		presets: [],
 	});
 
 	// Fetch existing config on mount to prefill
@@ -64,10 +65,12 @@
 		applying = true;
 		applyError = null;
 
-		// Mark all configured radios as enabled if they have required fields
+		// Enable radios that meet their type's requirements
 		const radios = config.radios.map((r) => ({
 			...r,
-			enabled: !!(r.serial_port && r.audio_source && r.audio_sink),
+			enabled: r.type === 'simulated'
+				? true
+				: !!(r.serial_port && r.audio_source && r.audio_sink),
 		}));
 		const finalConfig = { ...config, radios };
 

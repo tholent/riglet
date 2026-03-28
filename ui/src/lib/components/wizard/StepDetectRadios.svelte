@@ -60,6 +60,7 @@
 			{
 				id: `radio${next}`,
 				name: `Radio ${next}`,
+				type: 'real',
 				hamlib_model: 1,
 				serial_port: '',
 				baud_rate: 19200,
@@ -69,6 +70,29 @@
 				rigctld_port: 4532 + next - 1,
 				enabled: false,
 				polling_interval_ms: 100,
+				bands: [],
+			},
+		]);
+	}
+
+	function addSimulated() {
+		const next = radios.length + 1;
+		onUpdate([
+			...radios,
+			{
+				id: `sim${next}`,
+				name: `Simulated Radio ${next}`,
+				type: 'simulated',
+				hamlib_model: 1,
+				serial_port: '',
+				baud_rate: 19200,
+				ptt_method: 'cat',
+				audio_source: '',
+				audio_sink: '',
+				rigctld_port: 4532 + next - 1,
+				enabled: true,
+				polling_interval_ms: 100,
+				bands: [],
 			},
 		]);
 	}
@@ -108,58 +132,65 @@
 					<button class="remove-btn" onclick={() => removeRadio(i)} aria-label="Remove">✕</button>
 				</div>
 
-				<div class="fields">
-					<label>
-						Serial Port
-						<input
-							type="text"
-							value={radio.serial_port}
-							oninput={(e) => updateRadio(i, { serial_port: (e.target as HTMLInputElement).value })}
-							placeholder="/dev/ttyUSB0"
-						/>
-					</label>
+				{#if radio.type === 'simulated'}
+					<p class="sim-note">Simulated radio — no hardware required. Frequency, mode, and PTT are handled in software.</p>
+				{:else}
+					<div class="fields">
+						<label>
+							Serial Port
+							<input
+								type="text"
+								value={radio.serial_port}
+								oninput={(e) => updateRadio(i, { serial_port: (e.target as HTMLInputElement).value })}
+								placeholder="/dev/ttyUSB0"
+							/>
+						</label>
 
-					<label>
-						Hamlib Model
-						<select
-							value={radio.hamlib_model}
-							onchange={(e) => updateRadio(i, { hamlib_model: parseInt((e.target as HTMLSelectElement).value) })}
+						<label>
+							Hamlib Model
+							<select
+								value={radio.hamlib_model}
+								onchange={(e) => updateRadio(i, { hamlib_model: parseInt((e.target as HTMLSelectElement).value) })}
+							>
+								{#each hamlibModels as m}
+									<option value={m.id}>{m.id} — {m.name}</option>
+								{/each}
+							</select>
+						</label>
+
+						<label>
+							Baud Rate
+							<input
+								type="number"
+								value={radio.baud_rate}
+								oninput={(e) => updateRadio(i, { baud_rate: parseInt((e.target as HTMLInputElement).value) })}
+							/>
+						</label>
+					</div>
+
+					<div class="card-footer">
+						<button
+							onclick={() => testCat(radio, i)}
+							disabled={testingCat[i] || !radio.serial_port}
 						>
-							{#each hamlibModels as m}
-								<option value={m.id}>{m.id} — {m.name}</option>
-							{/each}
-						</select>
-					</label>
-
-					<label>
-						Baud Rate
-						<input
-							type="number"
-							value={radio.baud_rate}
-							oninput={(e) => updateRadio(i, { baud_rate: parseInt((e.target as HTMLInputElement).value) })}
-						/>
-					</label>
-				</div>
-
-				<div class="card-footer">
-					<button
-						onclick={() => testCat(radio, i)}
-						disabled={testingCat[i] || !radio.serial_port}
-					>
-						{testingCat[i] ? 'Testing...' : 'Test CAT'}
-					</button>
-					{#if catTestResults[i]}
-						{#if catTestResults[i].success}
-							<span class="ok">Connected — {catTestResults[i].freq?.toFixed(3)} MHz</span>
-						{:else}
-							<span class="err">{catTestResults[i].error}</span>
+							{testingCat[i] ? 'Testing...' : 'Test CAT'}
+						</button>
+						{#if catTestResults[i]}
+							{#if catTestResults[i].success}
+								<span class="ok">Connected — {catTestResults[i].freq?.toFixed(3)} MHz</span>
+							{:else}
+								<span class="err">{catTestResults[i].error}</span>
+							{/if}
 						{/if}
-					{/if}
-				</div>
+					</div>
+				{/if}
 			</div>
 		{/each}
 
-		<button class="add-btn" onclick={addManual}>+ Add Radio</button>
+		<div class="add-btns">
+			<button class="add-btn" onclick={addManual}>+ Add Real Radio</button>
+			<button class="add-btn sim" onclick={addSimulated}>+ Add Simulated Radio</button>
+		</div>
 	{/if}
 </div>
 
@@ -227,18 +258,36 @@
 
 	.remove-btn:hover { color: #f44; }
 
-	.add-btn {
+	.add-btns {
+		display: flex;
+		gap: 8px;
 		margin-top: 8px;
+	}
+
+	.add-btn {
+		flex: 1;
 		padding: 8px 16px;
 		border: 1px dashed #555;
 		border-radius: 4px;
 		background: none;
 		color: #888;
 		cursor: pointer;
-		width: 100%;
 	}
 
 	.add-btn:hover { border-color: #aaa; color: #fff; }
+
+	.add-btn.sim { border-color: #7a5; color: #7a5; }
+	.add-btn.sim:hover { border-color: #9c7; color: #9c7; }
+
+	.sim-note {
+		color: #7a5;
+		font-size: 0.9rem;
+		margin: 0 0 8px;
+		padding: 8px 10px;
+		background: rgba(119, 170, 85, 0.08);
+		border-radius: 4px;
+		border: 1px solid rgba(119, 170, 85, 0.25);
+	}
 
 	button:disabled { opacity: 0.5; cursor: not-allowed; }
 

@@ -51,39 +51,43 @@
 		<div class="radio-section">
 			<h3>{radio.name}</h3>
 
-			<div class="fields">
-				<label>
-					Audio Source (RX)
-					<select
-						value={radio.audio_source}
-						onchange={(e) => updateRadio(i, { audio_source: (e.target as HTMLSelectElement).value })}
-					>
-						<option value="">— none —</option>
-						{#each audioDevices as d}
-							{@const claimer = getClaimedBy(d.source, radio.id)}
-							<option value={d.source} disabled={claimer !== null}>
-								{d.name}{claimer ? ` (In use by ${claimer})` : ''}
-							</option>
-						{/each}
-					</select>
-				</label>
+			{#if radio.type === 'simulated'}
+				<p class="sim-note">Simulated radio — no audio device needed.</p>
+			{:else}
+				<div class="fields">
+					<label>
+						Audio Source (RX)
+						<select
+							value={radio.audio_source}
+							onchange={(e) => updateRadio(i, { audio_source: (e.target as HTMLSelectElement).value })}
+						>
+							<option value="">— none —</option>
+							{#each audioDevices as d}
+								{@const claimer = getClaimedBy(d.source, radio.id)}
+								<option value={d.source} disabled={claimer !== null}>
+									{d.name}{claimer ? ` (In use by ${claimer})` : ''}
+								</option>
+							{/each}
+						</select>
+					</label>
 
-				<label>
-					Audio Sink (TX)
-					<select
-						value={radio.audio_sink}
-						onchange={(e) => updateRadio(i, { audio_sink: (e.target as HTMLSelectElement).value })}
-					>
-						<option value="">— none —</option>
-						{#each audioDevices as d}
-							{@const claimer = getClaimedBy(d.sink, radio.id)}
-							<option value={d.sink} disabled={claimer !== null}>
-								{d.name}{claimer ? ` (In use by ${claimer})` : ''}
-							</option>
-						{/each}
-					</select>
-				</label>
-			</div>
+					<label>
+						Audio Sink (TX)
+						<select
+							value={radio.audio_sink}
+							onchange={(e) => updateRadio(i, { audio_sink: (e.target as HTMLSelectElement).value })}
+						>
+							<option value="">— none —</option>
+							{#each audioDevices as d}
+								{@const claimer = getClaimedBy(d.sink, radio.id)}
+								<option value={d.sink} disabled={claimer !== null}>
+									{d.name}{claimer ? ` (In use by ${claimer})` : ''}
+								</option>
+							{/each}
+						</select>
+					</label>
+				</div>
+			{/if}
 		</div>
 	{/each}
 
@@ -95,6 +99,16 @@
 <style>
 	.step h2 { margin-top: 0; }
 	.hint { color: #888; }
+
+	.sim-note {
+		color: #7a5;
+		font-size: 0.9rem;
+		margin: 0;
+		padding: 8px 10px;
+		background: rgba(119, 170, 85, 0.08);
+		border-radius: 4px;
+		border: 1px solid rgba(119, 170, 85, 0.25);
+	}
 
 	.radio-section {
 		border: 1px solid #444;

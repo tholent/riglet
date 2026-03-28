@@ -26,21 +26,25 @@
 	{#each radios as radio, i}
 		<div class="radio-section">
 			<h3>{radio.name}</h3>
-			<div class="options">
-				{#each PTT_METHODS as method}
-					<label class="option" class:active={radio.ptt_method === method.value}>
-						<input
-							type="radio"
-							name={`ptt-${radio.id}`}
-							value={method.value}
-							checked={radio.ptt_method === method.value}
-							onchange={() => updatePtt(i, method.value)}
-						/>
-						<span class="method-label">{method.label}</span>
-						<span class="method-desc">{method.description}</span>
-					</label>
-				{/each}
-			</div>
+			{#if radio.type === 'simulated'}
+				<p class="sim-note">Simulated radio — PTT is handled in software, no hardware method needed.</p>
+			{:else}
+				<div class="options">
+					{#each PTT_METHODS as method}
+						<label class="option" class:active={radio.ptt_method === method.value}>
+							<input
+								type="radio"
+								name={`ptt-${radio.id}`}
+								value={method.value}
+								checked={radio.ptt_method === method.value}
+								onchange={() => updatePtt(i, method.value)}
+							/>
+							<span class="method-label">{method.label}</span>
+							<span class="method-desc">{method.description}</span>
+						</label>
+					{/each}
+				</div>
+			{/if}
 		</div>
 	{/each}
 
@@ -52,6 +56,16 @@
 <style>
 	.step h2 { margin-top: 0; }
 	.hint { color: #888; }
+
+	.sim-note {
+		color: #7a5;
+		font-size: 0.9rem;
+		margin: 0;
+		padding: 8px 10px;
+		background: rgba(119, 170, 85, 0.08);
+		border-radius: 4px;
+		border: 1px solid rgba(119, 170, 85, 0.25);
+	}
 
 	.radio-section {
 		border: 1px solid #444;
