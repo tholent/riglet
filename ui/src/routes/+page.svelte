@@ -141,6 +141,18 @@
 		audioMgr = new AudioManager();
 		await audioMgr.startRx();
 
+		if (state.simulation) {
+			// Simulated radio: mic is the audio source (RX path)
+			audioMgr.onRxPcmFloat = (f32: Float32Array) => { latestPcm = f32; };
+			await audioMgr.startMicAsRx();
+
+			return () => {
+				cws.disconnect();
+				audioMgr?.stopRx(); // also calls stopMicAsRx internally
+			};
+		}
+
+		// Real radio: server audio via WebSocket
 		const aws = new AudioWebSocket(radioId, (buf: ArrayBuffer) => {
 			audioMgr?.feedRx(buf);
 			// Extract Float32 samples for LUFS metering

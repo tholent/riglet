@@ -49,6 +49,12 @@ export class AudioManager {
 	private txActive = false;
 	private volume = 0.5;
 
+	// Mic-as-RX (simulation mode)
+	private micRxStream: MediaStream | null = null;
+	private micRxSource: MediaStreamAudioSourceNode | null = null;
+	private micRxAnalyser: AnalyserNode | null = null;
+	private micRxRaf = 0;
+
 	// Squelch state
 	private squelch: SquelchParams = { ...DEFAULT_SQUELCH };
 	private squelchOpen = true;
@@ -110,7 +116,51 @@ export class AudioManager {
 		this.gainNode.connect(this.audioCtx.destination);
 	}
 
+	/**
+	 * Simulation mode: capture the client microphone and route it through the
+	 * RX DSP chain so it plays through speakers and drives all visualizations.
+	 * Fires onRxPcmFloat at ~60 fps for LUFS metering and viz.
+	 */
+	async startMicAsRx(): Promise<void> {
+		if (!this.audioCtx || !this.dspChain) return;
+		try {
+			this.micRxStream = await navigator.mediaDevices.getUserMedia({
+				audio: { sampleRate: 16000, channelCount: 1, echoCancellation: true },
+				video: false,
+			});
+			this.micRxSource = this.audioCtx.createMediaStreamSource(this.micRxStream);
+			// Feed mic through the DSP chain → squelch → volume → speakers
+			this.micRxSource.connect(this.dspChain.input);
+
+			// Tap mic signal for onRxPcmFloat (LUFS / visualization)
+			this.micRxAnalyser = this.audioCtx.createAnalyser();
+			this.micRxAnalyser.fftSize = 512;
+			this.micRxSource.connect(this.micRxAnalyser);
+
+			const buf = new Float32Array(this.micRxAnalyser.fftSize);
+			const poll = () => {
+				this.micRxAnalyser!.getFloatTimeDomainData(buf);
+				this.onRxPcmFloat?.(buf);
+				this.micRxRaf = requestAnimationFrame(poll);
+			};
+			this.micRxRaf = requestAnimationFrame(poll);
+		} catch (e) {
+			console.warn('[AudioManager] Mic access for simulation RX denied:', e);
+		}
+	}
+
+	stopMicAsRx(): void {
+		cancelAnimationFrame(this.micRxRaf);
+		this.micRxAnalyser?.disconnect();
+		this.micRxAnalyser = null;
+		this.micRxSource?.disconnect();
+		this.micRxSource = null;
+		this.micRxStream?.getTracks().forEach((t) => t.stop());
+		this.micRxStream = null;
+	}
+
 	stopRx(): void {
+		this.stopMicAsRx();
 		if (this.squelchHoldTimer !== null) {
 			clearTimeout(this.squelchHoldTimer);
 			this.squelchHoldTimer = null;
