@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import LufsMeter from '$lib/components/LufsMeter.svelte';
 	import type { VisualizationMode } from '$lib/viz/types.js';
 	import type { Renderer, RendererContext, VisualizationData } from '$lib/viz/types.js';
 	import { createRenderer } from '$lib/viz/base-renderer.js';
@@ -44,6 +45,25 @@
 		cursorMhz = 0,
 		radioMode = '',
 	}: Props = $props();
+
+	const LUFS_POSITION_KEY = 'riglet:lufsPosition';
+	type LufsPosition = 'left' | 'right';
+
+	function loadLufsPosition(): LufsPosition {
+		try {
+			const v = localStorage.getItem(LUFS_POSITION_KEY);
+			return v === 'left' ? 'left' : 'right';
+		} catch {
+			return 'right';
+		}
+	}
+
+	let lufsPosition = $state<LufsPosition>(loadLufsPosition());
+
+	function toggleLufsPosition() {
+		lufsPosition = lufsPosition === 'right' ? 'left' : 'right';
+		try { localStorage.setItem(LUFS_POSITION_KEY, lufsPosition); } catch { /* ignore */ }
+	}
 
 	let canvas: HTMLCanvasElement;
 	let wrapperEl: HTMLDivElement;
@@ -219,18 +239,42 @@
 	});
 </script>
 
-<div class="viz-wrap" bind:this={wrapperEl} role="img" aria-label="Visualization panel">
-	<canvas bind:this={canvas} class="viz-canvas"></canvas>
+<div class="viz-outer" role="img" aria-label="Visualization panel">
+	{#if lufsPosition === 'left'}
+		<div class="lufs-col">
+			<LufsMeter {pcmSamples} fillHeight />
+			<button class="lufs-toggle" onclick={toggleLufsPosition} title="Move LUFS meter to right" aria-label="Move LUFS meter to right">▶</button>
+		</div>
+	{/if}
+
+	<div class="viz-wrap" bind:this={wrapperEl}>
+		<canvas bind:this={canvas} class="viz-canvas"></canvas>
+	</div>
+
+	{#if lufsPosition === 'right'}
+		<div class="lufs-col">
+			<button class="lufs-toggle" onclick={toggleLufsPosition} title="Move LUFS meter to left" aria-label="Move LUFS meter to left">◀</button>
+			<LufsMeter {pcmSamples} fillHeight />
+		</div>
+	{/if}
 </div>
 
 <style>
+	.viz-outer {
+		flex: 1;
+		min-height: 0;
+		display: flex;
+		flex-direction: row;
+		overflow: hidden;
+		border: 1px solid #333;
+		border-radius: 4px;
+		background: #000;
+	}
+
 	.viz-wrap {
 		flex: 1;
 		min-height: 0;
 		overflow: hidden;
-		background: #000;
-		border: 1px solid #333;
-		border-radius: 4px;
 		display: flex;
 		flex-direction: column;
 	}
@@ -243,4 +287,35 @@
 		min-height: 0;
 		image-rendering: pixelated;
 	}
+
+	.lufs-col {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		width: 52px;
+		background: #0d0d0d;
+		border-left: 1px solid #222;
+		padding: 4px 0;
+		gap: 4px;
+		flex-shrink: 0;
+	}
+
+	.lufs-col:first-child {
+		border-left: none;
+		border-right: 1px solid #222;
+	}
+
+	.lufs-toggle {
+		background: none;
+		border: none;
+		color: #555;
+		font-size: 0.6rem;
+		cursor: pointer;
+		padding: 2px;
+		line-height: 1;
+		flex-shrink: 0;
+	}
+
+	.lufs-toggle:hover { color: #aaa; }
+	.lufs-toggle:focus-visible { outline: 1px solid #4a9eff; outline-offset: 2px; }
 </style>

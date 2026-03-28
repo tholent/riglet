@@ -4,8 +4,10 @@
 
 	interface Props {
 		pcmSamples: Float32Array | null;
+		/** When true, canvas height tracks the parent element via ResizeObserver. */
+		fillHeight?: boolean;
 	}
-	let { pcmSamples }: Props = $props();
+	let { pcmSamples, fillHeight = false }: Props = $props();
 
 	// LUFS meter instance (16 kHz sample rate to match the audio pipeline)
 	const meter = new LufsMeter(16000);
@@ -107,9 +109,24 @@
 		animFrame = requestAnimationFrame(animate);
 	}
 
+	let containerEl: HTMLDivElement;
+
 	onMount(() => {
 		animFrame = requestAnimationFrame(animate);
-		return () => cancelAnimationFrame(animFrame);
+
+		let ro: ResizeObserver | null = null;
+		if (fillHeight && containerEl) {
+			ro = new ResizeObserver((entries) => {
+				const h = Math.round(entries[0]?.contentRect.height ?? 0);
+				if (h > 0 && canvasEl) canvasEl.height = h;
+			});
+			ro.observe(containerEl);
+		}
+
+		return () => {
+			cancelAnimationFrame(animFrame);
+			ro?.disconnect();
+		};
 	});
 
 	// Numeric readout formatted to 1 decimal place
@@ -118,7 +135,16 @@
 	);
 </script>
 
-<div class="lufs-meter" aria-label={`Audio level: ${lufsLabel}`} role="meter" aria-valuenow={Math.round(currentLufs)} aria-valuemin={MIN_LUFS} aria-valuemax={MAX_LUFS}>
+<div
+	bind:this={containerEl}
+	class="lufs-meter"
+	class:fill-height={fillHeight}
+	aria-label={`Audio level: ${lufsLabel}`}
+	role="meter"
+	aria-valuenow={Math.round(currentLufs)}
+	aria-valuemin={MIN_LUFS}
+	aria-valuemax={MAX_LUFS}
+>
 	<canvas
 		bind:this={canvasEl}
 		width={32}
@@ -136,6 +162,19 @@
 		align-items: center;
 		gap: 4px;
 		width: 48px;
+	}
+
+	.lufs-meter.fill-height {
+		height: 100%;
+		flex: 1;
+		min-height: 0;
+	}
+
+	.lufs-meter.fill-height .lufs-canvas {
+		flex: 1;
+		min-height: 0;
+		height: 100%;
+		width: 32px;
 	}
 
 	.lufs-canvas {
