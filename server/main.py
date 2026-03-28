@@ -13,6 +13,9 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import ValidationError
+from starlette.exceptions import HTTPException as StarletteHTTPException
+from starlette.responses import Response
+from starlette.types import Scope
 
 from config import RigletConfig, default_config, load_config
 from devices import DeviceEvent, UdevMonitor
@@ -75,11 +78,22 @@ app.include_router(_waterfall_router, prefix="/api")
 
 # Mount static SPA last — production path first, fallback to ui/build for dev.
 # Must come after routers so the "/" catch-all doesn't shadow /api/* routes.
+# SPAStaticFiles falls back to 200.html for unmatched paths (SvelteKit SPA routing).
+class SPAStaticFiles(StaticFiles):
+    async def get_response(self, path: str, scope: Scope) -> Response:
+        try:
+            return await super().get_response(path, scope)
+        except StarletteHTTPException as exc:
+            if exc.status_code == 404:
+                return await super().get_response("200.html", scope)
+            raise
+
+
 _STATIC_DIR = Path("/opt/riglet/app/static")
 _DEV_STATIC_DIR = Path(__file__).parent.parent / "ui" / "build"
 _active_static = next((d for d in (_STATIC_DIR, _DEV_STATIC_DIR) if d.is_dir()), None)
 if _active_static:
-    app.mount("/", StaticFiles(directory=str(_active_static), html=True), name="static")
+    app.mount("/", SPAStaticFiles(directory=str(_active_static), html=True), name="static")
 
 # ---------------------------------------------------------------------------
 # Exception handlers
