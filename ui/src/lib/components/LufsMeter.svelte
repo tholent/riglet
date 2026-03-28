@@ -24,6 +24,11 @@
 	const DECAY_DB_PER_SEC = 3;
 	const PEAK_HOLD_MS = 1500; // hold before decay starts
 
+	// Layout constants (canvas pixels)
+	const LABEL_W = 22; // width of each label column
+	const BAR_W = 16;   // width of the level bar
+	const CANVAS_W = LABEL_W * 2 + BAR_W; // 60px total
+
 	let canvasEl: HTMLCanvasElement;
 	let animFrame: number;
 
@@ -47,58 +52,69 @@
 
 	function lufsToColor(lufs: number): string {
 		const t = lerp(lufs, MIN_LUFS, MAX_LUFS);
-		if (t < 0.6) {
-			// green
-			return '#4caf50';
-		} else if (t < 0.85) {
-			// yellow
-			return '#ffeb3b';
-		} else {
-			// red
-			return '#f44336';
-		}
+		if (t < 0.6) return '#4caf50';
+		if (t < 0.85) return '#ffeb3b';
+		return '#f44336';
 	}
 
 	function drawMeter(ctx: CanvasRenderingContext2D, w: number, h: number) {
 		ctx.clearRect(0, 0, w, h);
 
-		// Background track
-		ctx.fillStyle = '#1a1a1a';
+		const barX = LABEL_W;
+
+		// Outer background
+		ctx.fillStyle = '#0d0d0d';
 		ctx.fillRect(0, 0, w, h);
+
+		// Bar track background
+		ctx.fillStyle = '#1a1a1a';
+		ctx.fillRect(barX, 0, BAR_W, h);
 
 		// Level bar
 		const levelT = lerp(currentLufs, MIN_LUFS, MAX_LUFS);
 		const barH = Math.round(levelT * h);
 		ctx.fillStyle = lufsToColor(currentLufs);
-		ctx.fillRect(0, h - barH, w, barH);
+		ctx.fillRect(barX, h - barH, BAR_W, barH);
 
-		// Peak-hold line
+		// Peak-hold decay
 		const now = performance.now();
 		const timeSincePeak = now - peakHeldAt;
-
 		if (timeSincePeak > PEAK_HOLD_MS) {
-			// Decay
 			const decayDb = ((timeSincePeak - PEAK_HOLD_MS) / 1000) * DECAY_DB_PER_SEC;
 			peakLufs = Math.max(MIN_LUFS - 1, peakLufs - decayDb);
 		}
 
-		const peakT = lerp(peakLufs, MIN_LUFS, MAX_LUFS);
+		// Peak-hold line
 		if (peakLufs > MIN_LUFS) {
+			const peakT = lerp(peakLufs, MIN_LUFS, MAX_LUFS);
 			const peakY = Math.round((1 - peakT) * h);
 			ctx.fillStyle = '#fff';
-			ctx.fillRect(0, peakY, w, 2);
+			ctx.fillRect(barX, peakY, BAR_W, 2);
 		}
 
-		// Tick marks at -60, -40, -23, -18, -9, 0
+		// Tick marks + labels
 		const ticks = [-60, -40, -23, -18, -9, 0];
-		ctx.fillStyle = '#555';
-		ctx.font = '8px monospace';
-		ctx.textAlign = 'right';
+		ctx.font = `${Math.max(7, Math.min(9, Math.round(h / 28)))}px monospace`;
+		ctx.textBaseline = 'middle';
+
 		for (const tick of ticks) {
 			const t = lerp(tick, MIN_LUFS, MAX_LUFS);
 			const y = Math.round((1 - t) * h);
-			ctx.fillStyle = '#444';
-			ctx.fillRect(0, y, w, 1);
+
+			// Tick line across bar only
+			ctx.fillStyle = '#3a3a3a';
+			ctx.fillRect(barX, y, BAR_W, 1);
+
+			const label = String(tick);
+
+			// Left label (right-aligned up to bar edge)
+			ctx.fillStyle = '#777';
+			ctx.textAlign = 'right';
+			ctx.fillText(label, barX - 3, y);
+
+			// Right label (left-aligned from bar edge)
+			ctx.textAlign = 'left';
+			ctx.fillText(label, barX + BAR_W + 3, y);
 		}
 	}
 
@@ -147,7 +163,7 @@
 >
 	<canvas
 		bind:this={canvasEl}
-		width={32}
+		width={CANVAS_W}
 		height={200}
 		class="lufs-canvas"
 		aria-hidden="true"
@@ -161,7 +177,7 @@
 		flex-direction: column;
 		align-items: center;
 		gap: 4px;
-		width: 48px;
+		width: 64px;
 	}
 
 	.lufs-meter.fill-height {
@@ -174,14 +190,12 @@
 		flex: 1;
 		min-height: 0;
 		height: 100%;
-		width: 32px;
+		width: 60px;
 	}
 
 	.lufs-canvas {
-		width: 32px;
+		width: 60px;
 		height: 200px;
-		border: 1px solid #333;
-		border-radius: 2px;
 		display: block;
 	}
 

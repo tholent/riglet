@@ -292,7 +292,7 @@
 		display: flex;
 		flex-direction: column;
 		align-items: center;
-		width: 52px;
+		width: 68px;
 		background: #0d0d0d;
 		border-left: 1px solid #222;
 		padding: 4px 0;
