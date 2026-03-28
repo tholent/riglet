@@ -242,8 +242,8 @@
 <div class="viz-outer" role="img" aria-label="Visualization panel">
 	{#if lufsPosition === 'left'}
 		<div class="lufs-col">
-			<LufsMeter {pcmSamples} fillHeight />
 			<button class="lufs-toggle" onclick={toggleLufsPosition} title="Move LUFS meter to right" aria-label="Move LUFS meter to right">▶</button>
+			<LufsMeter {pcmSamples} fillHeight />
 		</div>
 	{/if}
 
