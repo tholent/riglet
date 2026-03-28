@@ -211,6 +211,7 @@
 		</span>
 		<VizSwitcher bind:mode={vizMode} />
 		<LayoutManager />
+		<a href="/setup" class="setup-btn" title="Open setup wizard" aria-label="Setup / configuration">⚙</a>
 	</header>
 
 	<main id="main-content" tabindex="-1">
@@ -455,6 +456,31 @@
 	}
 
 	.no-radio a { color: #4a9eff; }
+
+	.setup-btn {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 28px;
+		height: 28px;
+		border: 1px solid #444;
+		border-radius: 4px;
+		background: #1a1a1a;
+		color: #888;
+		font-size: 1rem;
+		text-decoration: none;
+		transition: border-color 0.1s, color 0.1s;
+	}
+
+	.setup-btn:hover {
+		border-color: #666;
+		color: #ccc;
+	}
+
+	.setup-btn:focus-visible {
+		outline: 2px solid #4a9eff;
+		outline-offset: 2px;
+	}
 
 	@media (prefers-reduced-motion: reduce) {
 		* {
