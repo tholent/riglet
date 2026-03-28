@@ -1,13 +1,38 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import type { ControlWebSocket } from '$lib/websocket.js';
+	import { getRadioModes } from '$lib/api.js';
 
 	interface Props {
 		mode: string;
 		controlWs: ControlWebSocket | null;
+		radioId?: string;
 	}
-	let { mode, controlWs }: Props = $props();
+	let { mode, controlWs, radioId }: Props = $props();
 
-	const MODES = ['USB', 'LSB', 'AM', 'FM', 'CW', 'RTTY', 'FT8'];
+	const FALLBACK_MODES = ['USB', 'LSB', 'AM', 'FM', 'CW', 'RTTY', 'FT8'];
+
+	let modes = $state<string[]>(FALLBACK_MODES);
+	// Cache per radioId: module-level so it persists across remounts
+	const modeCache = new Map<string, string[]>();
+
+	onMount(() => {
+		if (!radioId) return;
+		if (modeCache.has(radioId)) {
+			modes = modeCache.get(radioId)!;
+			return;
+		}
+		getRadioModes(radioId)
+			.then((res) => {
+				if (res.modes && res.modes.length > 0) {
+					modes = res.modes;
+					modeCache.set(radioId, res.modes);
+				}
+			})
+			.catch(() => {
+				// Fall back to generic list — already set
+			});
+	});
 
 	function select(m: string) {
 		controlWs?.send({ type: 'mode', mode: m });
@@ -19,14 +44,14 @@
 			select(m);
 		} else if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
 			e.preventDefault();
-			const next = MODES[index + 1];
+			const next = modes[index + 1];
 			if (next) {
 				const el = document.querySelector<HTMLButtonElement>(`[data-mode="${next}"]`);
 				el?.focus();
 			}
 		} else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
 			e.preventDefault();
-			const prev = MODES[index - 1];
+			const prev = modes[index - 1];
 			if (prev) {
 				const el = document.querySelector<HTMLButtonElement>(`[data-mode="${prev}"]`);
 				el?.focus();
@@ -36,7 +61,7 @@
 </script>
 
 <div class="mode-selector" role="group" aria-label="Operating mode selector">
-	{#each MODES as m, i}
+	{#each modes as m, i}
 		<button
 			class="mode-btn"
 			class:active={mode === m}

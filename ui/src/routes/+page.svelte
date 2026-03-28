@@ -5,6 +5,8 @@
 	import { radioState, appConfig } from '$lib/stores.js';
 	import { ControlWebSocket, AudioWebSocket } from '$lib/websocket.js';
 	import { AudioManager } from '$lib/audio/audio-manager.js';
+	import { activeLayout } from '$lib/layout/store.js';
+	import type { LayoutConfig } from '$lib/layout/types.js';
 	import VisualizationPanel from '$lib/components/VisualizationPanel.svelte';
 	import FrequencyDisplay from '$lib/components/FrequencyDisplay.svelte';
 	import BandSelector from '$lib/components/BandSelector.svelte';
@@ -15,6 +17,8 @@
 	import LufsMeter from '$lib/components/LufsMeter.svelte';
 	import DspPanel from '$lib/components/DspPanel.svelte';
 	import PresetSelector from '$lib/components/PresetSelector.svelte';
+	import VfoSelector from '$lib/components/VfoSelector.svelte';
+	import CatExtended from '$lib/components/CatExtended.svelte';
 	import type { RadioState, PresetConfig } from '$lib/types.js';
 
 	let radioId = $state<string | null>(null);
@@ -27,6 +31,9 @@
 		online: false,
 		simulation: false,
 		smeter: 0,
+		vfo: 'VFOA',
+		swr: 1.0,
+		ctcss_tone: 0,
 	});
 	let rxVolume = $state(50);
 	let txGain = $state(50);
@@ -45,6 +52,12 @@
 	// Latest PCM samples for LUFS metering (fed from audio manager)
 	let latestPcm = $state<Float32Array | null>(null);
 
+	// Active layout from store
+	let layout = $state<LayoutConfig>($activeLayout);
+	$effect(() => {
+		layout = $activeLayout;
+	});
+
 	function handleControlMessage(msg: object) {
 		const m = msg as Record<string, unknown>;
 		if (m.freq !== undefined) state = { ...state, freq: m.freq as number };
@@ -52,6 +65,9 @@
 		if (m.ptt !== undefined) state = { ...state, ptt: m.ptt as boolean };
 		if (m.online !== undefined) state = { ...state, online: m.online as boolean };
 		if (m.smeter !== undefined) state = { ...state, smeter: m.smeter as number };
+		if (m.vfo !== undefined) state = { ...state, vfo: m.vfo as string };
+		if (m.swr !== undefined) state = { ...state, swr: m.swr as number };
+		if (m.ctcss_tone !== undefined) state = { ...state, ctcss_tone: m.ctcss_tone as number };
 		radioState.set(state);
 	}
 
@@ -143,6 +159,16 @@
 			audioMgr?.stopRx();
 		};
 	});
+
+	// Narrow screen breakpoint
+	let isNarrow = $state(false);
+	onMount(() => {
+		const mq = window.matchMedia('(max-width: 767px)');
+		isNarrow = mq.matches;
+		const handler = (e: MediaQueryListEvent) => { isNarrow = e.matches; };
+		mq.addEventListener('change', handler);
+		return () => mq.removeEventListener('change', handler);
+	});
 </script>
 
 <svelte:head>
@@ -172,43 +198,110 @@
 
 	<main id="main-content" tabindex="-1">
 		{#if radioId}
-			<div class="main-grid">
-				<!-- Left column: freq controls + waterfall -->
-				<section class="waterfall-col" aria-label="Frequency and waterfall">
-					<div class="radio-header">
-						<ModeSelector mode={state.mode} {controlWs} />
+			{#if isNarrow}
+				<!-- Narrow / single-column fallback -->
+				<div class="narrow-layout">
+					<div class="control-block">
+						<ModeSelector mode={state.mode} {controlWs} {radioId} />
+					</div>
+					<div class="control-block">
 						<FrequencyDisplay freq={state.freq} {controlWs} {presets} />
+					</div>
+					<div class="control-block">
 						<BandSelector {controlWs} currentFreq={state.freq} {region} {enabledBands} />
+					</div>
+					<div class="control-block">
 						<PresetSelector {radioId} currentFreqMhz={state.freq} {controlWs} />
 					</div>
 					<VisualizationPanel mode="waterfall" {radioId} cursorMhz={state.freq} radioMode={state.mode} />
-				</section>
-
-				<!-- Right column: controls -->
-				<section class="controls-col" aria-label="Radio controls">
-					<div class="control-block meter-row">
+					<div class="control-block">
 						<PttButton ptt={state.ptt} {controlWs} />
-						<LufsMeter pcmSamples={latestPcm} />
 					</div>
-
 					<div class="control-block">
 						<SmeterDisplay smeter={state.smeter ?? 0} />
 					</div>
-
 					<div class="control-block">
-						<AudioControls
-							{radioId}
-							{rxVolume}
-							{txGain}
-							audioManager={audioMgr}
-						/>
+						<AudioControls {radioId} {rxVolume} {txGain} audioManager={audioMgr} />
 					</div>
-
 					<div class="control-block">
 						<DspPanel dspChain={audioMgr?.getDspChain() ?? null} />
 					</div>
-				</section>
-			</div>
+				</div>
+			{:else}
+				<!-- Dynamic CSS Grid driven by active LayoutConfig -->
+				<div
+					class="layout-grid"
+					style="
+						grid-template-columns: repeat({layout.columns}, 1fr);
+						grid-template-rows: repeat({layout.rows}, auto);
+					"
+					aria-label="Radio control layout"
+				>
+					{#each layout.panels as panel (panel.id)}
+						<div
+							class="layout-panel"
+							style="
+								grid-column: {panel.position.col} / span {panel.position.colSpan};
+								grid-row: {panel.position.row} / span {panel.position.rowSpan};
+							"
+						>
+							{#if panel.component === 'visualization'}
+								<VisualizationPanel mode="waterfall" {radioId} cursorMhz={state.freq} radioMode={state.mode} />
+							{:else if panel.component === 'frequency'}
+								<div class="inner-block">
+									<FrequencyDisplay freq={state.freq} {controlWs} {presets} />
+								</div>
+							{:else if panel.component === 'band-selector'}
+								<div class="inner-block">
+									<BandSelector {controlWs} currentFreq={state.freq} {region} {enabledBands} />
+								</div>
+							{:else if panel.component === 'mode-selector'}
+								<div class="inner-block">
+									<ModeSelector mode={state.mode} {controlWs} {radioId} />
+								</div>
+							{:else if panel.component === 'ptt'}
+								<div class="inner-block">
+									<PttButton ptt={state.ptt} {controlWs} />
+								</div>
+							{:else if panel.component === 'smeter'}
+								<div class="inner-block">
+									<SmeterDisplay smeter={state.smeter ?? 0} />
+								</div>
+							{:else if panel.component === 'audio'}
+								<div class="inner-block">
+									<AudioControls {radioId} {rxVolume} {txGain} audioManager={audioMgr} />
+								</div>
+							{:else if panel.component === 'dsp'}
+								<div class="inner-block">
+									<DspPanel dspChain={audioMgr?.getDspChain() ?? null} />
+								</div>
+							{:else if panel.component === 'lufs-meter'}
+								<div class="inner-block">
+									<LufsMeter pcmSamples={latestPcm} />
+								</div>
+							{:else if panel.component === 'presets'}
+								<div class="inner-block">
+									<PresetSelector {radioId} currentFreqMhz={state.freq} {controlWs} />
+								</div>
+							{:else if panel.component === 'vfo'}
+								<div class="inner-block">
+									<VfoSelector vfo={state.vfo ?? 'VFOA'} {controlWs} />
+								</div>
+							{:else if panel.component === 'cat-extended'}
+								<div class="inner-block">
+									<CatExtended
+										vfo={state.vfo ?? 'VFOA'}
+										swr={state.swr ?? 1.0}
+										ctcssTone={state.ctcss_tone ?? 0}
+										ptt={state.ptt}
+										{controlWs}
+									/>
+								</div>
+							{/if}
+						</div>
+					{/each}
+				</div>
+			{/if}
 		{:else}
 			<div class="no-radio">
 				<p>No radio configured. <a href="/setup">Run setup wizard</a></p>
@@ -283,15 +376,6 @@
 	.status-pill.online { border-color: #4caf50; color: #4caf50; }
 	.status-pill.offline { border-color: #f44336; color: #f44336; }
 
-	.radio-header {
-		display: flex;
-		flex-direction: column;
-		gap: 8px;
-		padding: 10px 12px;
-		background: #141414;
-		border-bottom: 1px solid #222;
-	}
-
 	main {
 		flex: 1;
 		min-height: 0;
@@ -304,43 +388,45 @@
 		outline: none;
 	}
 
-	.main-grid {
+	/* Dynamic layout grid */
+	.layout-grid {
 		display: grid;
-		grid-template-columns: 1fr 360px;
 		gap: 0;
 		flex: 1;
 		min-height: 0;
 		overflow: hidden;
 	}
 
-	.waterfall-col {
-		padding: 8px;
-		border-right: 1px solid #222;
-		display: flex;
-		flex-direction: column;
+	.layout-panel {
 		min-height: 0;
 		overflow: hidden;
-	}
-
-	.controls-col {
-		padding: 16px;
 		display: flex;
 		flex-direction: column;
-		gap: 16px;
+	}
+
+	/* Panels that are not the visualization get block padding */
+	.inner-block {
+		background: #1a1a1a;
+		border: 1px solid #2a2a2a;
+		border-radius: 0;
+		padding: 10px 12px;
+		height: 100%;
+		box-sizing: border-box;
+	}
+
+	/* Narrow single-column fallback */
+	.narrow-layout {
+		display: flex;
+		flex-direction: column;
+		gap: 0;
+		flex: 1;
 		overflow-y: auto;
 	}
 
 	.control-block {
 		background: #1a1a1a;
-		border: 1px solid #2a2a2a;
-		border-radius: 6px;
-		padding: 14px;
-	}
-
-	.meter-row {
-		display: flex;
-		align-items: flex-start;
-		gap: 16px;
+		border-bottom: 1px solid #2a2a2a;
+		padding: 10px 12px;
 	}
 
 	.no-radio {
@@ -354,7 +440,6 @@
 	.no-radio a { color: #4a9eff; }
 
 	@media (prefers-reduced-motion: reduce) {
-		/* Disable any page-level transitions/animations */
 		* {
 			animation-duration: 0.01ms !important;
 			animation-iteration-count: 1 !important;

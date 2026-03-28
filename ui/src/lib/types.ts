@@ -41,6 +41,9 @@ export interface RadioState {
 	online: boolean;
 	simulation: boolean;
 	smeter?: number;
+	vfo?: string;
+	swr?: number;
+	ctcss_tone?: number;
 }
 
 export interface SerialDevice {
