@@ -73,6 +73,10 @@ class RadioInstance:
         self.rx_volume: int = 50
         self.tx_gain: int = 50
         self.nr_level: int = 0
+        # Extended CAT state (Task 5)
+        self.vfo: str = "VFOA"
+        self.swr: float = 1.0
+        self.ctcss_tone: float = 0.0
 
         # WebSocket channels (set externally by router handlers)
         self.ws_control: WebSocket | None = None
@@ -255,6 +259,62 @@ class RadioInstance:
         await self.send_command(rf"+\set_ptt {val}")
         self.ptt = active
 
+    async def get_vfo(self) -> str:
+        """Query active VFO.  Returns 'VFOA', 'VFOB', etc."""
+        if self.simulation:
+            return self.vfo
+        raw = await self.send_command(r"+\get_vfo")
+        first_line = raw.strip().splitlines()[0] if raw.strip() else ""
+        vfo = first_line.strip()
+        if not vfo:
+            raise RigctldError(-8, f"Cannot parse get_vfo response: {raw!r}")
+        return vfo
+
+    async def set_vfo(self, vfo: str) -> None:
+        """Set active VFO (e.g. 'VFOA', 'VFOB')."""
+        if self.simulation:
+            self.vfo = vfo
+            return
+        await self.send_command(rf"+\set_vfo {vfo}")
+        self.vfo = vfo
+
+    async def get_swr(self) -> float:
+        """Query SWR meter.  Returns float (e.g. 1.5).  Simulation returns 1.0."""
+        if self.simulation:
+            return self.swr
+        raw = await self.send_command(r"+\get_level SWR")
+        for line in raw.splitlines():
+            stripped = line.strip()
+            if stripped:
+                try:
+                    return float(stripped)
+                except ValueError:
+                    pass
+        raise RigctldError(-8, f"Cannot parse get_level SWR response: {raw!r}")
+
+    async def get_ctcss(self) -> float:
+        """Query CTCSS tone in Hz.  Returns 0.0 if not set.  Simulation returns stored value."""
+        if self.simulation:
+            return self.ctcss_tone
+        raw = await self.send_command(r"+\get_ctcss_tone")
+        for line in raw.splitlines():
+            stripped = line.strip()
+            if stripped:
+                try:
+                    return float(stripped)
+                except ValueError:
+                    pass
+        raise RigctldError(-8, f"Cannot parse get_ctcss_tone response: {raw!r}")
+
+    async def set_ctcss(self, tone: float) -> None:
+        """Set CTCSS tone in Hz.  Pass 0 to disable."""
+        if self.simulation:
+            self.ctcss_tone = tone
+            return
+        tone_hz = int(tone * 10)  # rigctld expects tone in units of 0.1 Hz
+        await self.send_command(rf"+\set_ctcss_tone {tone_hz}")
+        self.ctcss_tone = tone
+
     async def get_smeter(self) -> tuple[int, int]:
         """Return S-meter reading as (S-units, dBm).
 
@@ -280,10 +340,11 @@ class RadioInstance:
     # ------------------------------------------------------------------
 
     async def poll_once(self) -> dict[str, object]:
-        """Fetch current freq/mode/smeter and return only changed fields."""
+        """Fetch current freq/mode/smeter/vfo (and SWR when PTT) and return changed fields."""
         new_freq = await self.get_freq()
         new_mode = await self.get_mode()
         new_s, new_dbm = await self.get_smeter()
+        new_vfo = await self.get_vfo()
 
         changed: dict[str, object] = {}
         if new_freq != self.freq:
@@ -292,9 +353,23 @@ class RadioInstance:
         if new_mode != self.mode:
             changed["mode"] = new_mode
             self.mode = new_mode
+        if new_vfo != self.vfo:
+            changed["vfo"] = new_vfo
+            self.vfo = new_vfo
         # S-meter included unconditionally (always changes)
         changed["smeter_s"] = new_s
         changed["smeter_dbm"] = new_dbm
+
+        # Query SWR only during TX to avoid spurious readings
+        if self.ptt:
+            try:
+                new_swr = await self.get_swr()
+                if new_swr != self.swr:
+                    changed["swr"] = new_swr
+                    self.swr = new_swr
+            except RigctldError:
+                pass  # SWR not supported by all rigs — silently skip
+
         return changed
 
     async def start_polling(self) -> None:
@@ -422,6 +497,9 @@ class RadioManager:
                 "freq": inst.freq,
                 "mode": inst.mode,
                 "ptt": inst.ptt,
+                "vfo": inst.vfo,
+                "swr": inst.swr,
+                "ctcss_tone": inst.ctcss_tone,
             }
             for inst in self.radios.values()
         ]

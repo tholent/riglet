@@ -12,7 +12,8 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse
 from pydantic import ValidationError
 
-from config import RigletConfig, save_config
+from bandplan import get_bands
+from config import PresetConfig, RigletConfig, save_config
 from state import RadioManager
 
 logger = logging.getLogger(__name__)
@@ -256,3 +257,188 @@ async def get_hamlib_models() -> JSONResponse:
 
     _hamlib_models_cache = models
     return JSONResponse(content=models)
+
+
+# ---------------------------------------------------------------------------
+# GET /bandplan
+# ---------------------------------------------------------------------------
+
+
+@router.get("/bandplan")
+async def get_bandplan(request: Request) -> JSONResponse:
+    config: RigletConfig = request.app.state.config
+    region = config.operator.region
+    bands = get_bands(region)
+    return JSONResponse(
+        content={
+            "region": region,
+            "bands": [b.model_dump(mode="json") for b in bands],
+        }
+    )
+
+
+# ---------------------------------------------------------------------------
+# GET /presets
+# ---------------------------------------------------------------------------
+
+
+@router.get("/presets")
+async def get_presets(request: Request) -> JSONResponse:
+    config: RigletConfig = request.app.state.config
+    return JSONResponse(
+        content={"presets": [p.model_dump(mode="json") for p in config.presets]}
+    )
+
+
+# ---------------------------------------------------------------------------
+# POST /presets
+# ---------------------------------------------------------------------------
+
+
+@router.post("/presets")
+async def create_preset(request: Request) -> JSONResponse:
+    config: RigletConfig = request.app.state.config
+    body = await request.json()
+    try:
+        preset = PresetConfig.model_validate(body)
+    except Exception as exc:
+        return JSONResponse(status_code=422, content={"error": str(exc)})
+
+    # Validate band against current region
+    region = config.operator.region
+    plan_names = {b.name for b in get_bands(region)}
+    if preset.band not in plan_names:
+        return JSONResponse(
+            status_code=409,
+            content={
+                "type": "validation_error",
+                "title": "Invalid Band",
+                "detail": f"Band {preset.band!r} is not in region {region!r} band plan.",
+            },
+        )
+
+    # Check for duplicate id
+    if any(p.id == preset.id for p in config.presets):
+        return JSONResponse(
+            status_code=409,
+            content={"type": "conflict", "detail": f"Preset id {preset.id!r} already exists."},
+        )
+
+    updated = config.model_copy(update={"presets": [*config.presets, preset]})
+    save_config(updated)
+    request.app.state.config = updated
+    return JSONResponse(
+        content={"presets": [p.model_dump(mode="json") for p in updated.presets]}
+    )
+
+
+# ---------------------------------------------------------------------------
+# PUT /presets/{preset_id}
+# ---------------------------------------------------------------------------
+
+
+@router.put("/presets/{preset_id}")
+async def update_preset(preset_id: str, request: Request) -> JSONResponse:
+    config: RigletConfig = request.app.state.config
+    idx = next((i for i, p in enumerate(config.presets) if p.id == preset_id), None)
+    if idx is None:
+        raise HTTPException(status_code=404, detail=f"Preset {preset_id!r} not found")
+
+    body = await request.json()
+    try:
+        updated_preset = PresetConfig.model_validate(body)
+    except Exception as exc:
+        return JSONResponse(status_code=422, content={"error": str(exc)})
+
+    # Validate band against current region
+    region = config.operator.region
+    plan_names = {b.name for b in get_bands(region)}
+    if updated_preset.band not in plan_names:
+        return JSONResponse(
+            status_code=409,
+            content={
+                "type": "validation_error",
+                "title": "Invalid Band",
+                "detail": f"Band {updated_preset.band!r} is not in region {region!r} band plan.",
+            },
+        )
+
+    new_presets = list(config.presets)
+    new_presets[idx] = updated_preset
+    updated_config = config.model_copy(update={"presets": new_presets})
+    save_config(updated_config)
+    request.app.state.config = updated_config
+    return JSONResponse(
+        content={"presets": [p.model_dump(mode="json") for p in updated_config.presets]}
+    )
+
+
+# ---------------------------------------------------------------------------
+# DELETE /presets/{preset_id}
+# ---------------------------------------------------------------------------
+
+
+@router.delete("/presets/{preset_id}")
+async def delete_preset(preset_id: str, request: Request) -> JSONResponse:
+    config: RigletConfig = request.app.state.config
+    new_presets = [p for p in config.presets if p.id != preset_id]
+    if len(new_presets) == len(config.presets):
+        raise HTTPException(status_code=404, detail=f"Preset {preset_id!r} not found")
+
+    updated_config = config.model_copy(update={"presets": new_presets})
+    save_config(updated_config)
+    request.app.state.config = updated_config
+    return JSONResponse(
+        content={"presets": [p.model_dump(mode="json") for p in updated_config.presets]}
+    )
+
+
+# ---------------------------------------------------------------------------
+# POST /presets/import
+# ---------------------------------------------------------------------------
+
+
+@router.post("/presets/import")
+async def import_presets(request: Request) -> JSONResponse:
+    config: RigletConfig = request.app.state.config
+    body = await request.json()
+    raw_presets = body.get("presets", [])
+
+    region = config.operator.region
+    plan_names = {b.name for b in get_bands(region)}
+    parsed: list[PresetConfig] = []
+    for item in raw_presets:
+        try:
+            p = PresetConfig.model_validate(item)
+        except Exception as exc:
+            return JSONResponse(status_code=422, content={"error": str(exc)})
+        if p.band not in plan_names:
+            return JSONResponse(
+                status_code=409,
+                content={
+                    "type": "validation_error",
+                    "title": "Invalid Band",
+                    "detail": f"Band {p.band!r} is not in region {region!r} band plan.",
+                },
+            )
+        parsed.append(p)
+
+    updated_config = config.model_copy(update={"presets": parsed})
+    save_config(updated_config)
+    request.app.state.config = updated_config
+    return JSONResponse(
+        content={"presets": [p.model_dump(mode="json") for p in updated_config.presets]}
+    )
+
+
+# ---------------------------------------------------------------------------
+# GET /presets/export
+# ---------------------------------------------------------------------------
+
+
+@router.get("/presets/export")
+async def export_presets(request: Request) -> JSONResponse:
+    config: RigletConfig = request.app.state.config
+    return JSONResponse(
+        content={"presets": [p.model_dump(mode="json") for p in config.presets]}
+    )

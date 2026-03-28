@@ -1,4 +1,5 @@
-import type { AudioDevice, RadioState, RigletConfig, SerialDevice, StatusResponse } from './types.js';
+import type { AudioDevice, PresetConfig, RadioState, RigletConfig, SerialDevice, StatusResponse } from './types.js';
+import type { BandDef } from './bandplan.js';
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
 	const res = await fetch(path, options);
@@ -85,4 +86,39 @@ export function postAudioVolume(
 
 export function getHamlibModels(): Promise<{ id: number; name: string }[]> {
 	return request<{ id: number; name: string }[]>('/api/hamlib/models');
+}
+
+export function getBandPlan(): Promise<{ region: string; bands: BandDef[] }> {
+	return request<{ region: string; bands: BandDef[] }>('/api/bandplan');
+}
+
+export function getPresets(): Promise<{ presets: PresetConfig[] }> {
+	return request<{ presets: PresetConfig[] }>('/api/presets');
+}
+
+export function createPreset(preset: PresetConfig): Promise<{ presets: PresetConfig[] }> {
+	return request<{ presets: PresetConfig[] }>('/api/presets', json('POST', preset));
+}
+
+export function updatePreset(
+	presetId: string,
+	preset: PresetConfig,
+): Promise<{ presets: PresetConfig[] }> {
+	return request<{ presets: PresetConfig[] }>(`/api/presets/${presetId}`, json('PUT', preset));
+}
+
+export function deletePreset(presetId: string): Promise<{ presets: PresetConfig[] }> {
+	return request<{ presets: PresetConfig[] }>(`/api/presets/${presetId}`, { method: 'DELETE' });
+}
+
+export function importPresets(presets: PresetConfig[]): Promise<{ presets: PresetConfig[] }> {
+	return request<{ presets: PresetConfig[] }>('/api/presets/import', json('POST', { presets }));
+}
+
+export function exportPresets(): Promise<{ presets: PresetConfig[] }> {
+	return request<{ presets: PresetConfig[] }>('/api/presets/export');
+}
+
+export function getRadioModes(radioId: string): Promise<{ modes: string[] }> {
+	return request<{ modes: string[] }>(`/api/radio/${radioId}/modes`);
 }

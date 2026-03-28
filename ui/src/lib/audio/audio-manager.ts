@@ -57,6 +57,12 @@ export class AudioManager {
 	/** Called with s16le PCM ArrayBuffer for each TX chunk captured from mic */
 	onTxChunk: ((buffer: ArrayBuffer) => void) | null = null;
 
+	/** Called with Float32Array of TX PCM for visualization (normalised -1..+1). */
+	onTxPcmFloat: ((samples: Float32Array) => void) | null = null;
+
+	/** Called with Float32Array of RX PCM for visualization (normalised -1..+1). */
+	onRxPcmFloat: ((samples: Float32Array) => void) | null = null;
+
 	async startRx(): Promise<void> {
 		if (this.audioCtx) return; // already running
 
@@ -84,12 +90,17 @@ export class AudioManager {
 			const { type, payload } = event.data as { type: string; payload: ArrayBuffer };
 			if (type === 'tx' && this.txActive && this.onTxChunk) {
 				this.onTxChunk(payload);
+				if (this.onTxPcmFloat) {
+					this.onTxPcmFloat(_s16leToFloat32(payload));
+				}
+			} else if (type === 'rx-float' && this.onRxPcmFloat) {
+				this.onRxPcmFloat(payload as unknown as Float32Array);
 			}
 		};
 
-		// Build DSP filter/EQ/compressor chain
+		// Build DSP filter/EQ/compressor chain (async to load NR worklet)
 		this.dspChain = new DspChain(this.audioCtx);
-		this.dspChain.build();
+		await this.dspChain.build();
 
 		// Wire up full DSP chain:
 		// worklet -> bandpass -> notch -> compressor -> bass -> mid -> treble -> squelch -> volume -> speakers
@@ -153,6 +164,11 @@ export class AudioManager {
 	 *  Also evaluates squelch based on RMS of the incoming chunk. */
 	feedRx(buffer: ArrayBuffer): void {
 		if (!this.workletNode) return;
+
+		// Notify RX PCM visualization listeners before we transfer the buffer
+		if (this.onRxPcmFloat) {
+			this.onRxPcmFloat(_s16leToFloat32(buffer));
+		}
 
 		// Evaluate squelch if threshold > 0
 		if (this.squelch.threshold > 0) {
@@ -243,6 +259,16 @@ export class AudioManager {
 			this.squelchNode.gain.value = 0;
 		}
 	}
+}
+
+/** Convert s16le PCM ArrayBuffer to Float32Array normalised to [-1, +1]. */
+function _s16leToFloat32(buffer: ArrayBuffer): Float32Array {
+	const ints = new Int16Array(buffer);
+	const floats = new Float32Array(ints.length);
+	for (let i = 0; i < ints.length; i++) {
+		floats[i] = ints[i] / 32768;
+	}
+	return floats;
 }
 
 /** Compute the RMS amplitude of an s16le PCM buffer, normalised to [0, 1]. */

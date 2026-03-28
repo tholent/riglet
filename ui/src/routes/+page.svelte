@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
-	import { getStatus, getConfig, getRadioCat } from '$lib/api.js';
+	import { getStatus, getConfig, getRadioCat, getPresets } from '$lib/api.js';
 	import { radioState, appConfig } from '$lib/stores.js';
 	import { ControlWebSocket, AudioWebSocket } from '$lib/websocket.js';
 	import { AudioManager } from '$lib/audio/audio-manager.js';
@@ -12,7 +12,10 @@
 	import PttButton from '$lib/components/PttButton.svelte';
 	import SmeterDisplay from '$lib/components/SmeterDisplay.svelte';
 	import AudioControls from '$lib/components/AudioControls.svelte';
-	import type { RadioState } from '$lib/types.js';
+	import LufsMeter from '$lib/components/LufsMeter.svelte';
+	import DspPanel from '$lib/components/DspPanel.svelte';
+	import PresetSelector from '$lib/components/PresetSelector.svelte';
+	import type { RadioState, PresetConfig } from '$lib/types.js';
 
 	let radioId = $state<string | null>(null);
 	let state = $state<RadioState>({
@@ -31,6 +34,16 @@
 	let controlWs = $state<ControlWebSocket | null>(null);
 	let audioWs: AudioWebSocket | null = null;
 	let audioMgr = $state<AudioManager | null>(null);
+
+	// Presets
+	let presets = $state<PresetConfig[]>([]);
+
+	// Region and enabled bands from config
+	let region = $state('us');
+	let enabledBands = $state<string[]>([]);
+
+	// Latest PCM samples for LUFS metering (fed from audio manager)
+	let latestPcm = $state<Float32Array | null>(null);
 
 	function handleControlMessage(msg: object) {
 		const m = msg as Record<string, unknown>;
@@ -68,8 +81,20 @@
 		try {
 			const cfg = await getConfig();
 			appConfig.set(cfg);
+			region = cfg.operator?.region ?? 'us';
+			// Find the first radio's enabled bands
+			const radio = cfg.radios?.find((r) => r.id === radioId);
+			enabledBands = radio?.bands ?? [];
 		} catch {
 			// ignore
+		}
+
+		// Load presets
+		try {
+			const result = await getPresets();
+			presets = result.presets;
+		} catch {
+			// ignore — presets optional
 		}
 
 		if (!radioId) return;
@@ -94,6 +119,13 @@
 
 		const aws = new AudioWebSocket(radioId, (buf: ArrayBuffer) => {
 			audioMgr?.feedRx(buf);
+			// Extract Float32 samples for LUFS metering
+			const s16 = new Int16Array(buf);
+			const f32 = new Float32Array(s16.length);
+			for (let i = 0; i < s16.length; i++) {
+				f32[i] = s16[i] / 32768;
+			}
+			latestPcm = f32;
 		});
 		audioMgr.onTxChunk = (buf: ArrayBuffer) => {
 			aws.sendBinary(buf);
@@ -145,16 +177,18 @@
 				<section class="waterfall-col" aria-label="Frequency and waterfall">
 					<div class="radio-header">
 						<ModeSelector mode={state.mode} {controlWs} />
-						<FrequencyDisplay freq={state.freq} {controlWs} />
-						<BandSelector {controlWs} currentFreq={state.freq} />
+						<FrequencyDisplay freq={state.freq} {controlWs} {presets} />
+						<BandSelector {controlWs} currentFreq={state.freq} {region} {enabledBands} />
+						<PresetSelector {radioId} currentFreqMhz={state.freq} {controlWs} />
 					</div>
-					<VisualizationPanel mode="waterfall" {radioId} />
+					<VisualizationPanel mode="waterfall" {radioId} cursorMhz={state.freq} radioMode={state.mode} />
 				</section>
 
 				<!-- Right column: controls -->
 				<section class="controls-col" aria-label="Radio controls">
-					<div class="control-block">
+					<div class="control-block meter-row">
 						<PttButton ptt={state.ptt} {controlWs} />
+						<LufsMeter pcmSamples={latestPcm} />
 					</div>
 
 					<div class="control-block">
@@ -168,6 +202,10 @@
 							{txGain}
 							audioManager={audioMgr}
 						/>
+					</div>
+
+					<div class="control-block">
+						<DspPanel dspChain={audioMgr?.getDspChain() ?? null} />
 					</div>
 				</section>
 			</div>
@@ -297,6 +335,12 @@
 		border: 1px solid #2a2a2a;
 		border-radius: 6px;
 		padding: 14px;
+	}
+
+	.meter-row {
+		display: flex;
+		align-items: flex-start;
+		gap: 16px;
 	}
 
 	.no-radio {

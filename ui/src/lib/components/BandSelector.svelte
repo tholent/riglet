@@ -1,56 +1,62 @@
 <script lang="ts">
 	import type { ControlWebSocket } from '$lib/websocket.js';
-
-	interface Band {
-		label: string;
-		defaultMhz: number;
-		rangeLow: number;
-		rangeHigh: number;
-	}
+	import { getBands } from '$lib/bandplan.js';
+	import type { BandDef } from '$lib/bandplan.js';
 
 	interface Props {
 		controlWs: ControlWebSocket | null;
 		currentFreq: number;
+		/** Region code, e.g. 'us', 'eu', 'au'. Defaults to 'us'. */
+		region?: string;
+		/** Band names that are enabled for this radio. Pills not in this list are greyed out. */
+		enabledBands?: string[];
 	}
-	let { controlWs, currentFreq }: Props = $props();
+	let { controlWs, currentFreq, region = 'us', enabledBands = [] }: Props = $props();
 
-	const BANDS: Band[] = [
-		{ label: '160m', defaultMhz: 1.900,  rangeLow: 1.800,  rangeHigh: 2.000  },
-		{ label: '80m',  defaultMhz: 3.750,  rangeLow: 3.500,  rangeHigh: 4.000  },
-		{ label: '40m',  defaultMhz: 7.100,  rangeLow: 7.000,  rangeHigh: 7.300  },
-		{ label: '30m',  defaultMhz: 10.120, rangeLow: 10.100, rangeHigh: 10.150 },
-		{ label: '20m',  defaultMhz: 14.200, rangeLow: 14.000, rangeHigh: 14.350 },
-		{ label: '17m',  defaultMhz: 18.100, rangeLow: 18.068, rangeHigh: 18.168 },
-		{ label: '15m',  defaultMhz: 21.200, rangeLow: 21.000, rangeHigh: 21.450 },
-		{ label: '12m',  defaultMhz: 24.940, rangeLow: 24.890, rangeHigh: 24.990 },
-		{ label: '10m',  defaultMhz: 28.500, rangeLow: 28.000, rangeHigh: 29.700 },
-		{ label: '6m',   defaultMhz: 50.150, rangeLow: 50.000, rangeHigh: 54.000 },
-	];
+	// Derive band list from region; fall back to US on error
+	const bands = $derived((): BandDef[] => {
+		try {
+			return getBands(region);
+		} catch {
+			return getBands('us');
+		}
+	});
 
-	function isActive(band: Band): boolean {
-		return currentFreq >= band.rangeLow && currentFreq <= band.rangeHigh;
-	}
-
-	function jumpToBand(band: Band) {
-		controlWs?.send({ type: 'freq', freq: band.defaultMhz });
+	function isActive(band: BandDef): boolean {
+		return currentFreq >= band.lower_mhz && currentFreq <= band.upper_mhz;
 	}
 
-	function onBandKeydown(e: KeyboardEvent, band: Band, index: number) {
+	function isEnabled(band: BandDef): boolean {
+		// If enabledBands is empty (not configured), treat all as interactive
+		if (enabledBands.length === 0) return true;
+		return enabledBands.includes(band.name);
+	}
+
+	function jumpToBand(band: BandDef) {
+		if (!isEnabled(band)) return;
+		// Use midpoint as the default frequency when jumping
+		const defaultMhz = (band.lower_mhz + band.upper_mhz) / 2;
+		controlWs?.send({ type: 'freq', freq: defaultMhz });
+	}
+
+	function onBandKeydown(e: KeyboardEvent, band: BandDef, index: number) {
+		if (!isEnabled(band)) return;
+		const allBands = bands();
 		if (e.key === 'Enter' || e.key === ' ') {
 			e.preventDefault();
 			jumpToBand(band);
 		} else if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
 			e.preventDefault();
-			const next = BANDS[index + 1];
+			const next = allBands[index + 1];
 			if (next) {
-				const el = document.querySelector<HTMLButtonElement>(`[data-band="${next.label}"]`);
+				const el = document.querySelector<HTMLButtonElement>(`[data-band="${next.name}"]`);
 				el?.focus();
 			}
 		} else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
 			e.preventDefault();
-			const prev = BANDS[index - 1];
+			const prev = allBands[index - 1];
 			if (prev) {
-				const el = document.querySelector<HTMLButtonElement>(`[data-band="${prev.label}"]`);
+				const el = document.querySelector<HTMLButtonElement>(`[data-band="${prev.name}"]`);
 				el?.focus();
 			}
 		}
@@ -58,17 +64,21 @@
 </script>
 
 <div class="band-selector" role="group" aria-label="Band selector">
-	{#each BANDS as band, i}
+	{#each bands() as band, i}
+		{@const enabled = isEnabled(band)}
 		<button
 			class="band-pill"
 			class:active={isActive(band)}
+			class:disabled={!enabled}
 			onclick={() => jumpToBand(band)}
 			onkeydown={(e) => onBandKeydown(e, band, i)}
-			aria-label={`${band.label} band (${band.rangeLow}–${band.rangeHigh} MHz)`}
+			aria-label={`${band.name} band (${band.lower_mhz}–${band.upper_mhz} MHz)${!enabled ? ' — not enabled for this radio' : ''}`}
 			aria-pressed={isActive(band)}
-			data-band={band.label}
+			aria-disabled={!enabled}
+			data-band={band.name}
+			title={!enabled ? 'Not enabled for this radio' : undefined}
 		>
-			{band.label}
+			{band.name}
 		</button>
 	{/each}
 </div>
@@ -94,7 +104,7 @@
 		white-space: nowrap;
 	}
 
-	.band-pill:hover:not(.active) {
+	.band-pill:hover:not(.active):not(.disabled) {
 		border-color: #666;
 		color: #ccc;
 	}
@@ -102,6 +112,12 @@
 	.band-pill.active {
 		border-color: #4a9eff;
 		color: #4a9eff;
+	}
+
+	.band-pill.disabled {
+		opacity: 0.35;
+		pointer-events: none;
+		cursor: default;
 	}
 
 	.band-pill:focus-visible {

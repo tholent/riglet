@@ -1,12 +1,15 @@
 <script lang="ts">
 	import type { ControlWebSocket } from '$lib/websocket.js';
+	import type { PresetConfig } from '$lib/types.js';
 	import { scrollWheel } from '$lib/actions/scrollwheel.js';
 
 	interface Props {
 		freq: number;
 		controlWs: ControlWebSocket | null;
+		/** Optional list of presets for showing an active-preset label. */
+		presets?: PresetConfig[];
 	}
-	let { freq, controlWs }: Props = $props();
+	let { freq, controlWs, presets = [] }: Props = $props();
 
 	let editing = $state(false);
 	let editValue = $state('');
@@ -55,52 +58,72 @@
 			nudge(-1);
 		}
 	}
+
+	/** Find a preset within 1 kHz (0.001 MHz) of the current frequency. */
+	const activePreset = $derived(
+		presets.find((p) => Math.abs(p.frequency_mhz - freq) <= 0.001) ?? null,
+	);
 </script>
 
-<div
-	class="freq-row"
-	role="group"
-	aria-label="Frequency control"
-	use:scrollWheel={{ onDelta: (d) => nudge(d as 1 | -1) }}
->
-	<button
-		class="nudge"
-		onclick={() => nudge(-1)}
-		aria-label="Tune down 1 kHz"
-	>−</button>
-
-	{#if editing}
-		<!-- svelte-ignore a11y_autofocus -->
-		<input
-			autofocus
-			class="freq-input"
-			type="text"
-			bind:value={editValue}
-			onblur={commitEdit}
-			onkeydown={onKeydown}
-			aria-label="Enter frequency in MHz"
-		/>
-	{:else}
+<div class="freq-wrap">
+	<div
+		class="freq-row"
+		role="group"
+		aria-label="Frequency control"
+		use:scrollWheel={{ onDelta: (d) => nudge(d as 1 | -1) }}
+	>
 		<button
-			class="freq-display"
-			onclick={startEdit}
-			onkeydown={onDisplayKeydown}
-			aria-label={`Frequency ${formatFreq(freq)} MHz. Press Enter to edit, arrow keys to nudge.`}
-			aria-live="polite"
-			aria-atomic="true"
-		>
-			{formatFreq(freq)}<span class="unit"> MHz</span>
-		</button>
-	{/if}
+			class="nudge"
+			onclick={() => nudge(-1)}
+			aria-label="Tune down 1 kHz"
+		>−</button>
 
-	<button
-		class="nudge"
-		onclick={() => nudge(1)}
-		aria-label="Tune up 1 kHz"
-	>+</button>
+		{#if editing}
+			<!-- svelte-ignore a11y_autofocus -->
+			<input
+				autofocus
+				class="freq-input"
+				type="text"
+				bind:value={editValue}
+				onblur={commitEdit}
+				onkeydown={onKeydown}
+				aria-label="Enter frequency in MHz"
+			/>
+		{:else}
+			<button
+				class="freq-display"
+				onclick={startEdit}
+				onkeydown={onDisplayKeydown}
+				aria-label={`Frequency ${formatFreq(freq)} MHz. Press Enter to edit, arrow keys to nudge.`}
+				aria-live="polite"
+				aria-atomic="true"
+			>
+				{formatFreq(freq)}<span class="unit"> MHz</span>
+			</button>
+		{/if}
+
+		<button
+			class="nudge"
+			onclick={() => nudge(1)}
+			aria-label="Tune up 1 kHz"
+		>+</button>
+	</div>
+
+	{#if activePreset}
+		<span class="preset-label" aria-label={`Active preset: ${activePreset.name}`}>
+			{activePreset.name}
+		</span>
+	{/if}
 </div>
 
 <style>
+	.freq-wrap {
+		display: inline-flex;
+		flex-direction: column;
+		align-items: flex-start;
+		gap: 2px;
+	}
+
 	.freq-row {
 		display: inline-flex;
 		align-items: center;
@@ -172,6 +195,13 @@
 	.nudge:focus-visible {
 		outline: 2px solid #4a9eff;
 		outline-offset: 2px;
+	}
+
+	.preset-label {
+		font-size: 0.78rem;
+		color: var(--color-text-muted, #888);
+		padding-left: 52px; /* align under the freq display (past the nudge button + gap) */
+		font-style: italic;
 	}
 
 	@media (prefers-reduced-motion: reduce) {

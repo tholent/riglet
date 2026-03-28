@@ -3,13 +3,13 @@
  *
  * Chain order (all nodes created on the same AudioContext):
  *
- *   worklet → bandpass → notch → compressor → bass → mid → treble → squelch → gain → destination
+ *   worklet → bandpass → notch → NR → compressor → bass → mid → treble → squelch → gain → destination
  *
  * All filter stages are bypassed by default (pass-through).
  *
  * Usage:
  *   const chain = new DspChain(audioCtx);
- *   chain.build();
+ *   await chain.build();
  *   workletNode.connect(chain.input);
  *   chain.output.connect(squelchNode); // or destination
  *
@@ -35,17 +35,21 @@ export class DspChain {
 	// Filter nodes (public for direct Web Audio API inspection if needed)
 	bandpassNode: BiquadFilterNode | null = null;
 	notchNode: BiquadFilterNode | null = null;
+	nrNode: AudioWorkletNode | null = null;
 	compressorNode: DynamicsCompressorNode | null = null;
 	bassNode: BiquadFilterNode | null = null;
 	midNode: BiquadFilterNode | null = null;
 	trebleNode: BiquadFilterNode | null = null;
 
-	// Bypass gain nodes — set to 0 to bypass the adjacent filter (or 1 to enable)
-	// We implement bypass by disconnecting/reconnecting to keep the graph simple.
+	// Bypass state flags
 	private _bandpassEnabled = false;
 	private _notchEnabled = false;
+	private _nrEnabled = false;
 	private _compressorEnabled = false;
 	private _eqEnabled = false;
+
+	// Whether NR worklet has been successfully loaded
+	private _nrAvailable = false;
 
 	private _ctx: AudioContext;
 
@@ -66,8 +70,9 @@ export class DspChain {
 	/**
 	 * Allocate and wire all DSP nodes.
 	 * Must be called once after construction, before connecting to the graph.
+	 * Returns a Promise because loading the NR worklet is async (best-effort).
 	 */
-	build(): void {
+	async build(): Promise<void> {
 		const ctx = this._ctx;
 
 		// Bandpass filter (bypassed by default: wide pass so it's transparent)
@@ -81,6 +86,21 @@ export class DspChain {
 		this.notchNode.type = 'notch';
 		this.notchNode.frequency.value = 1000;
 		this.notchNode.Q.value = 0.01;
+
+		// Noise reduction worklet (best-effort: may fail on some browsers)
+		try {
+			await ctx.audioWorklet.addModule('/nr-worklet.js');
+			this.nrNode = new AudioWorkletNode(ctx, 'nr-processor', {
+				numberOfInputs: 1,
+				numberOfOutputs: 1,
+				outputChannelCount: [1],
+			});
+			this._nrAvailable = true;
+		} catch (e) {
+			console.warn('[DspChain] NR worklet unavailable:', e);
+			this.nrNode = null;
+			this._nrAvailable = false;
+		}
 
 		// Dynamics compressor
 		this.compressorNode = ctx.createDynamicsCompressor();
@@ -109,9 +129,15 @@ export class DspChain {
 		this.trebleNode.frequency.value = 3000;
 		this.trebleNode.gain.value = 0;
 
-		// Wire chain in series
-		this.bandpassNode.connect(this.notchNode);
-		this.notchNode.connect(this.compressorNode);
+		// Wire chain in series: bandpass → notch → [NR] → compressor → bass → mid → treble
+		if (this.nrNode) {
+			this.bandpassNode.connect(this.notchNode);
+			this.notchNode.connect(this.nrNode);
+			this.nrNode.connect(this.compressorNode);
+		} else {
+			this.bandpassNode.connect(this.notchNode);
+			this.notchNode.connect(this.compressorNode);
+		}
 		this.compressorNode.connect(this.bassNode);
 		this.bassNode.connect(this.midNode);
 		this.midNode.connect(this.trebleNode);
@@ -121,12 +147,14 @@ export class DspChain {
 	destroy(): void {
 		this.bandpassNode?.disconnect();
 		this.notchNode?.disconnect();
+		this.nrNode?.disconnect();
 		this.compressorNode?.disconnect();
 		this.bassNode?.disconnect();
 		this.midNode?.disconnect();
 		this.trebleNode?.disconnect();
 		this.bandpassNode = null;
 		this.notchNode = null;
+		this.nrNode = null;
 		this.compressorNode = null;
 		this.bassNode = null;
 		this.midNode = null;
@@ -188,6 +216,32 @@ export class DspChain {
 
 	isNotchEnabled(): boolean {
 		return this._notchEnabled;
+	}
+
+	// ------------------------------------------------------------------
+	// Noise reduction control
+	// ------------------------------------------------------------------
+
+	/** Set NR amount (0.0 = off, 1.0 = maximum). */
+	setNrAmount(amount: number): void {
+		if (!this.nrNode) return;
+		const param = this.nrNode.parameters.get('amount');
+		if (param) param.value = Math.max(0, Math.min(1, amount));
+	}
+
+	enableNr(enabled: boolean): void {
+		if (!this.nrNode) return;
+		this._nrEnabled = enabled;
+		const param = this.nrNode.parameters.get('enabled');
+		if (param) param.value = enabled ? 1 : 0;
+	}
+
+	isNrEnabled(): boolean {
+		return this._nrEnabled;
+	}
+
+	isNrAvailable(): boolean {
+		return this._nrAvailable;
 	}
 
 	// ------------------------------------------------------------------

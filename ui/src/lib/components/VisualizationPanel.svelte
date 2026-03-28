@@ -6,15 +6,20 @@
 	import { WaterfallRenderer } from '$lib/viz/waterfall-renderer.js';
 	import { SpectrumRenderer } from '$lib/viz/spectrum-renderer.js';
 	import { OscilloscopeRenderer } from '$lib/viz/oscilloscope-renderer.js';
+	import { ConstellationRenderer } from '$lib/viz/constellation-renderer.js';
+	import { PhaseRenderer } from '$lib/viz/phase-renderer.js';
+	import { Spectrogram3dRenderer } from '$lib/viz/spectrogram3d-renderer.js';
 
 	// Side-effect imports to ensure all renderers are registered before use.
 	// The imports above already trigger self-registration via their module-level
 	// registerRenderer() calls.  TypeScript needs the import to be used so we
-	// reference the constructors in a comment: WaterfallRenderer, SpectrumRenderer,
-	// OscilloscopeRenderer — registered on import.
+	// reference the constructors in a comment.
 	void WaterfallRenderer;
 	void SpectrumRenderer;
 	void OscilloscopeRenderer;
+	void ConstellationRenderer;
+	void PhaseRenderer;
+	void Spectrogram3dRenderer;
 
 	interface Props {
 		/** Which visualization to display. */
@@ -25,6 +30,10 @@
 		pcmSamples?: Float32Array | null;
 		/** PCM sample rate in Hz (default 16000). */
 		sampleRate?: number;
+		/** Current tuned frequency in MHz (for passband cursor). */
+		cursorMhz?: number;
+		/** Current radio mode (e.g. "USB", "LSB") for passband cursor. */
+		radioMode?: string;
 	}
 
 	let {
@@ -32,6 +41,8 @@
 		radioId,
 		pcmSamples = null,
 		sampleRate = 16000,
+		cursorMhz = 0,
+		radioMode = '',
 	}: Props = $props();
 
 	let canvas: HTMLCanvasElement;
@@ -45,7 +56,6 @@
 	// Freq state updated from WS messages; forwarded to renderer.
 	let centerMhz = 0;
 	let spanKhz = 0;
-	let radioMode = '';
 
 	// ---------------------------------------------------------------
 	// WebSocket connection
@@ -154,6 +164,15 @@
 		const samples = pcmSamples;
 		if (samples && renderer) {
 			feedFrame(null, samples);
+		}
+	});
+
+	// Forward cursor (tuned freq + mode) to WaterfallRenderer when it changes
+	$effect(() => {
+		const freq = cursorMhz;
+		const m = radioMode;
+		if (renderer && 'updateCursor' in renderer && typeof renderer.updateCursor === 'function') {
+			(renderer as WaterfallRenderer).updateCursor(freq, m);
 		}
 	});
 

@@ -11,6 +11,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from deps import RadioDep
+from modes import get_modes
 from state import RigctldError
 
 logger = logging.getLogger(__name__)
@@ -36,6 +37,14 @@ class PttRequest(BaseModel):
 
 class NudgeRequest(BaseModel):
     direction: Literal[1, -1]
+
+
+class VfoRequest(BaseModel):
+    vfo: str
+
+
+class CtcssRequest(BaseModel):
+    tone: float
 
 
 # ---------------------------------------------------------------------------
@@ -108,6 +117,52 @@ async def nudge_freq(body: NudgeRequest, radio: RadioDep) -> JSONResponse:
     )
 
 
+@router.get("/radio/{radio_id}/cat/vfo")
+async def get_vfo(radio: RadioDep) -> JSONResponse:
+    try:
+        vfo = await radio.get_vfo()
+        return JSONResponse(content={"vfo": vfo})
+    except Exception as exc:
+        return JSONResponse(status_code=503, content={"error": str(exc)})
+
+
+@router.post("/radio/{radio_id}/cat/vfo")
+async def set_vfo(body: VfoRequest, radio: RadioDep) -> JSONResponse:
+    await radio.set_vfo(body.vfo)
+    return JSONResponse(content={"vfo": radio.vfo})
+
+
+@router.get("/radio/{radio_id}/cat/swr")
+async def get_swr(radio: RadioDep) -> JSONResponse:
+    try:
+        swr = await radio.get_swr()
+        return JSONResponse(content={"swr": swr})
+    except Exception as exc:
+        return JSONResponse(status_code=503, content={"error": str(exc)})
+
+
+@router.get("/radio/{radio_id}/cat/ctcss")
+async def get_ctcss(radio: RadioDep) -> JSONResponse:
+    try:
+        tone = await radio.get_ctcss()
+        return JSONResponse(content={"tone": tone})
+    except Exception as exc:
+        return JSONResponse(status_code=503, content={"error": str(exc)})
+
+
+@router.post("/radio/{radio_id}/cat/ctcss")
+async def set_ctcss(body: CtcssRequest, radio: RadioDep) -> JSONResponse:
+    await radio.set_ctcss(body.tone)
+    return JSONResponse(content={"tone": radio.ctcss_tone})
+
+
+@router.get("/radio/{radio_id}/modes")
+async def get_modes_endpoint(radio: RadioDep) -> JSONResponse:
+    """Return the curated mode list for this radio's Hamlib model."""
+    modes = get_modes(radio.config.hamlib_model)
+    return JSONResponse(content={"modes": modes})
+
+
 @router.post("/radio/{radio_id}/cat/test")
 async def test_connection(radio: RadioDep) -> JSONResponse:
     try:
@@ -176,6 +231,12 @@ async def ws_control(websocket: WebSocket, radio_id: str) -> None:
                     new_freq = round(radio.freq + direction * 0.001, 6)
                     await radio.set_freq(new_freq)
                     await websocket.send_json({"type": "state", "freq": radio.freq})
+                elif msg_type == "vfo":
+                    await radio.set_vfo(str(msg["vfo"]))
+                    await websocket.send_json({"type": "state", "vfo": radio.vfo})
+                elif msg_type == "ctcss":
+                    await radio.set_ctcss(float(msg["tone"]))
+                    await websocket.send_json({"type": "state", "ctcss_tone": radio.ctcss_tone})
                 else:
                     await websocket.send_json(
                         {

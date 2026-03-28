@@ -10,6 +10,7 @@
 
 import { registerRenderer } from './base-renderer.js';
 import type { Renderer, RendererContext, VisualizationData } from './types.js';
+import { computePassband, drawPassbandOverlay } from './cursor.js';
 
 const AXIS_HEIGHT = 28;
 const BINS = 256;
@@ -41,6 +42,9 @@ export class WaterfallRenderer implements Renderer {
 	private waterfallHeight = 0;
 	private centerMhz = 0;
 	private spanKhz = 0;
+	private radioMode = '';
+	/** Tuned frequency in MHz; 0 means use centerMhz (cursor at centre). */
+	private cursorMhz = 0;
 
 	init(context: RendererContext): void {
 		this.ctx = context.ctx;
@@ -49,20 +53,16 @@ export class WaterfallRenderer implements Renderer {
 		this._allocImageData();
 		this.centerMhz = context.centerMhz;
 		this.spanKhz = context.spanKhz;
+		this.radioMode = context.mode;
 	}
 
 	render(data: VisualizationData): void {
 		if (!this.ctx || !this.imageData) return;
 		if (!data.fftBins) return;
 
-		// Update freq metadata if provided (values come through VisualizationPanel)
-		// We read them from context via the panel's resize/update calls;
-		// here we derive them from the data bundle's parent RendererContext fields
-		// by trusting the panel to call resize with updated context when they change.
-		// The panel passes centerMhz/spanKhz via resize — we store them there.
-
 		this._scrollAndDraw(data.fftBins);
 		this._drawAxis();
+		this._drawCursor();
 	}
 
 	resize(width: number, height: number): void {
@@ -117,6 +117,12 @@ export class WaterfallRenderer implements Renderer {
 		this.ctx.putImageData(this.imageData, 0, 0);
 	}
 
+	/** Update the cursor/tuned frequency (call from VisualizationPanel on state changes). */
+	updateCursor(cursorMhz: number, mode: string): void {
+		this.cursorMhz = cursorMhz;
+		this.radioMode = mode;
+	}
+
 	private _drawAxis(): void {
 		if (!this.ctx) return;
 		const ctx = this.ctx;
@@ -153,6 +159,27 @@ export class WaterfallRenderer implements Renderer {
 			ctx.fillStyle = '#888';
 			ctx.fillText(tick.toFixed(3), x, axisY + 6);
 		}
+	}
+
+	private _drawCursor(): void {
+		if (!this.ctx) return;
+		// Need a valid frequency window and a mode to compute passband
+		if (this.centerMhz === 0 || this.spanKhz === 0 || this.width === 0) return;
+		// If cursorMhz is not yet set, nothing to draw
+		if (this.cursorMhz === 0 && this.radioMode === '') return;
+
+		const cursorFreq = this.cursorMhz !== 0 ? this.cursorMhz : this.centerMhz;
+		if (cursorFreq === 0) return;
+
+		const region = computePassband(
+			this.centerMhz,
+			this.spanKhz,
+			cursorFreq,
+			this.radioMode || 'USB',
+			this.width,
+		);
+
+		drawPassbandOverlay(this.ctx, this.width, this.waterfallHeight, region);
 	}
 }
 
