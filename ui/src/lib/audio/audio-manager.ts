@@ -136,6 +136,10 @@ export class AudioManager {
 			// Feed mic through the DSP chain → squelch → volume → speakers
 			this.micRxSource.connect(this.dspChain.input);
 
+			// Resume the AudioContext — it starts suspended in most browsers
+			// until a user gesture.  The getUserMedia permission prompt qualifies.
+			await this.audioCtx.resume();
+
 			// Time-domain tap for onRxPcmFloat (LUFS / PCM-based visualizations)
 			this.micRxAnalyser = this.audioCtx.createAnalyser();
 			this.micRxAnalyser.fftSize = 512;
@@ -147,17 +151,18 @@ export class AudioManager {
 			this.micRxFftAnalyser.smoothingTimeConstant = 0.75;
 			this.micRxSource.connect(this.micRxFftAnalyser);
 
-			const fftBuf = new Float32Array(this.micRxFftAnalyser.frequencyBinCount);
-
 			const poll = () => {
-				// Allocate a fresh buffer each frame so Svelte $state detects the change
+				// Allocate fresh buffers every frame — Svelte $state uses strict
+				// equality (===) to detect changes, so reusing the same reference
+				// would silently suppress all reactive updates.
 				const pcmFrame = new Float32Array(this.micRxAnalyser!.fftSize);
 				this.micRxAnalyser!.getFloatTimeDomainData(pcmFrame);
 				this.onRxPcmFloat?.(pcmFrame);
 
 				if (this.onSimFftBins) {
-					this.micRxFftAnalyser!.getFloatFrequencyData(fftBuf);
-					this.onSimFftBins(fftBuf);
+					const fftFrame = new Float32Array(this.micRxFftAnalyser!.frequencyBinCount);
+					this.micRxFftAnalyser!.getFloatFrequencyData(fftFrame);
+					this.onSimFftBins(fftFrame);
 				}
 
 				this.micRxRaf = requestAnimationFrame(poll);
