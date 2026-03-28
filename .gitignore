@@ -206,7 +206,9 @@ marimo/_static/
 marimo/_lsp/
 __marimo__/
 
+# ZiggyStack
 .state/
+analysis/
 
 # Riglet-specific
 server/.venv/
