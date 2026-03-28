@@ -8,6 +8,7 @@ const VOICE_OPERATING: LayoutConfig = {
 	id: 'voice-operating',
 	name: 'Voice Operating',
 	columns: 2,
+	columnWidths: '2fr 1fr',
 	rows: 6,
 	panels: [
 		{ id: 'mode', component: 'mode-selector', position: { row: 1, col: 1, rowSpan: 1, colSpan: 1 } },
@@ -29,6 +30,7 @@ const DIGITAL_MODES: LayoutConfig = {
 	id: 'digital-modes',
 	name: 'Digital Modes',
 	columns: 2,
+	columnWidths: '2fr 1fr',
 	rows: 6,
 	panels: [
 		{ id: 'mode', component: 'mode-selector', position: { row: 1, col: 1, rowSpan: 1, colSpan: 1 } },
@@ -51,6 +53,7 @@ const SWL: LayoutConfig = {
 	id: 'swl',
 	name: 'SWL',
 	columns: 2,
+	columnWidths: '2fr 1fr',
 	rows: 4,
 	panels: [
 		{ id: 'freq', component: 'frequency', position: { row: 1, col: 1, rowSpan: 1, colSpan: 1 } },

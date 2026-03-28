@@ -250,7 +250,7 @@
 				<div
 					class="layout-grid"
 					style="
-						grid-template-columns: repeat({layout.columns}, 1fr);
+						grid-template-columns: {layout.columnWidths ?? `repeat(${layout.columns}, 1fr)`};
 						grid-template-rows: repeat({layout.rows}, auto);
 					"
 					aria-label="Radio control layout"

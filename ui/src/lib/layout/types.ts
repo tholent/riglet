@@ -29,6 +29,8 @@ export interface LayoutConfig {
 	id: string;
 	name: string;
 	columns: number;
+	/** CSS grid-template-columns value. Defaults to repeat(columns, 1fr) if omitted. */
+	columnWidths?: string;
 	rows: number;
 	panels: LayoutPanel[];
 }
