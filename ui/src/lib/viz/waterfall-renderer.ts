@@ -13,11 +13,22 @@ import type { Renderer, RendererContext, VisualizationData } from './types.js';
 import { computePassband, drawPassbandOverlay } from './cursor.js';
 
 const AXIS_HEIGHT = 28;
-const BINS = 256;
 
-/** Map a normalised magnitude value [0, 1] to an RGB triple. */
+// dBFS range used for normalization when bins come from Web Audio AnalyserNode
+const DBFS_MIN = -120;
+const DBFS_MAX = 0;
+
+/** Map a magnitude value to an RGB triple.
+ *  Accepts either normalised [0,1] or dBFS (< 0) from getFloatFrequencyData. */
 function binToRgb(v: number): [number, number, number] {
-	const c = Math.max(0, Math.min(1, v));
+	// Normalize dBFS input (e.g. from simulation mode AnalyserNode)
+	let norm: number;
+	if (v <= 0 && v < -0.001) {
+		norm = Math.max(0, Math.min(1, (v - DBFS_MIN) / (DBFS_MAX - DBFS_MIN)));
+	} else {
+		norm = Math.max(0, Math.min(1, v));
+	}
+	const c = norm;
 	if (c < 0.5) {
 		const t = c * 2;
 		return [Math.round(t * 255), Math.round(t * 200), Math.round((1 - t) * 200)];
@@ -88,8 +99,8 @@ export class WaterfallRenderer implements Renderer {
 
 	private _allocImageData(): void {
 		if (!this.ctx) return;
-		const h = this.waterfallHeight;
-		const w = BINS;
+		const w = Math.max(1, this.width);
+		const h = Math.max(1, this.waterfallHeight);
 		this.imageData = this.ctx.createImageData(w, h);
 		// Fill opaque black
 		this.imageData.data.fill(0);
@@ -100,13 +111,19 @@ export class WaterfallRenderer implements Renderer {
 
 	private _scrollAndDraw(bins: number[]): void {
 		if (!this.ctx || !this.imageData) return;
+		const w = this.imageData.width;
 		const h = this.imageData.height;
 		const data = this.imageData.data;
 		// Shift existing rows down by one row
-		data.copyWithin(BINS * 4, 0, BINS * (h - 1) * 4);
-		// Write new row at top
-		for (let x = 0; x < BINS; x++) {
-			const val = bins[x] ?? 0;
+		data.copyWithin(w * 4, 0, w * (h - 1) * 4);
+		// Write new row at top — interpolate bins across the full canvas width
+		const n = bins.length;
+		for (let x = 0; x < w; x++) {
+			const t = (x / (w - 1)) * (n - 1);
+			const lo = Math.floor(t);
+			const hi = Math.min(lo + 1, n - 1);
+			const frac = t - lo;
+			const val = (bins[lo] ?? 0) * (1 - frac) + (bins[hi] ?? 0) * frac;
 			const [r, g, b] = binToRgb(val);
 			const offset = x * 4;
 			data[offset] = r;
