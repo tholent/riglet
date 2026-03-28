@@ -15,7 +15,7 @@ uv run pytest tests/test_foo.py::test_name  # run a single test
 uv run ruff check .            # lint
 uv run ruff check --fix .      # lint + auto-fix
 uv run mypy .                  # type check (strict mode)
-uv run uvicorn server.main:app --reload  # run dev server on port 8080
+uv run uvicorn main:app --reload  # run dev server on port 8080
 ```
 
 Ruff, mypy, and pytest must all pass clean before committing.

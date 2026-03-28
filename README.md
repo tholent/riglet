@@ -39,7 +39,7 @@ uv sync
 
 ```bash
 cd server
-uv run uvicorn server.main:app --reload
+uv run uvicorn main:app --reload
 ```
 
 The backend runs on `http://localhost:8080` in simulation mode (no hardware required).
@@ -86,7 +86,7 @@ Output goes to `ui/build/`.
 
 1. Start the backend (from `server/`):
    ```bash
-   uv run uvicorn server.main:app --reload
+   uv run uvicorn main:app --reload
    ```
 
 2. In a new terminal, start the frontend dev server (from `ui/`):

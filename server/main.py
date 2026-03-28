@@ -110,7 +110,7 @@ if __name__ == "__main__":
         _startup_config = default_config()
 
     uvicorn.run(
-        "server.main:app",
+        "main:app",
         host="0.0.0.0",
         port=_startup_config.network.http_port,
         reload=False,
