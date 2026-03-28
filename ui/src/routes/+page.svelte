@@ -19,6 +19,7 @@
 	import PresetSelector from '$lib/components/PresetSelector.svelte';
 	import VfoSelector from '$lib/components/VfoSelector.svelte';
 	import CatExtended from '$lib/components/CatExtended.svelte';
+	import LayoutManager from '$lib/components/LayoutManager.svelte';
 	import type { RadioState, PresetConfig } from '$lib/types.js';
 
 	let radioId = $state<string | null>(null);
@@ -194,6 +195,7 @@
 		>
 			{state.online ? (state.simulation ? 'SIM' : 'ONLINE') : 'OFFLINE'}
 		</span>
+		<LayoutManager />
 	</header>
 
 	<main id="main-content" tabindex="-1">

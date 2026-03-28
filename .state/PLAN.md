@@ -33,7 +33,7 @@
 | 19 | LUFS audio meter component | P1 | @developer | [~] in-process | 12 | Always-visible meter with peak hold |
 | 20 | Waterfall cursor (passband overlay) | P1 | @developer | [~] in-process | 13, 6 | Mode-aware passband highlight |
 
-| 21 | Waterfall cursor drag-to-tune | P1 | @developer | [ ] pending | 20 | Dragging cursor changes frequency |
+| 21 | Waterfall cursor drag-to-tune | P1 | @developer | [x] complete | 20 | Dragging cursor changes frequency |
 | 22 | Client-side DSP: volume + squelch nodes | P0 | @developer | [~] in-process | -- | Web Audio API gain + gate in AudioManager |
 | 23 | Client-side DSP: bandpass + notch filters | P1 | @developer | [x] complete | 22 | BiquadFilterNode chain |
 | 24 | Client-side DSP: noise reduction worklet | P2 | @developer | [~] in-process | 22 | Spectral subtraction AudioWorklet |
@@ -44,15 +44,15 @@
 | 29 | Region-aware BandSelector component | P1 | @developer | [~] in-process | 1, 3 | All region bands; greyed for non-enabled |
 | 30 | Frequency presets UI | P1 | @developer | [~] in-process | 7, 29 | Preset selector + label in freq display |
 | 31 | Layout system: schema + persistence | P1 | @developer | [x] complete | 18 | JSON layout configs in localStorage |
-| 32 | Layout system: save/load/export/import UI | P1 | @developer | [ ] pending | 31 | Layout management panel |
+| 32 | Layout system: save/load/export/import UI | P1 | @developer | [x] complete | 31 | Layout management panel |
 | 33 | Main page layout refactor for configurable panels | P1 | @developer | [x] complete | 31 | Dynamic grid from layout config |
 | 34 | Virtual device passthrough documentation | P2 | @developer | [~] in-process | -- | Docs + helper scripts |
 | 35 | Extended CAT frontend controls (VFO, SWR, CTCSS) | P1 | @developer | [x] complete | 5, 10 | UI for new CAT features |
 | 36 | ModeSelector curated mode support | P1 | @developer | [x] complete | 6, 3 | Filter modes per radio capability |
-| 37 | Backend tests: band plan, presets, config schema | P0 | @tester | [ ] pending | 1, 2, 7 | pytest for new backend features |
-| 38 | Backend tests: extended CAT, simulation type | P1 | @tester | [ ] pending | 4, 5 | pytest for new CAT + simulation |
-| 39 | Frontend build verification | P1 | @tester | [ ] pending | 33 | npm run build passes clean |
-| 40 | Full lint + type check pass | P0 | @tester | [ ] pending | 33 | ruff, mypy, svelte-check all clean |
+| 37 | Backend tests: band plan, presets, config schema | P0 | @tester | [x] complete | 1, 2, 7 | pytest for new backend features |
+| 38 | Backend tests: extended CAT, simulation type | P1 | @tester | [x] complete | 4, 5 | pytest for new CAT + simulation |
+| 39 | Frontend build verification | P1 | @tester | [x] complete | 33 | npm run build passes clean |
+| 40 | Full lint + type check pass | P0 | @tester | [x] complete | 33 | ruff, mypy, svelte-check all clean |
 
 ---
 
