@@ -231,7 +231,8 @@
 		gap: 4px;
 		align-items: center;
 		justify-content: center;
-		padding-top: 6px;
+		padding-top: 4px;
+		width: 100%;
 	}
 
 	.pill {

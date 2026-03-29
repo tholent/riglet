@@ -384,10 +384,12 @@
 					<div class="control-block">
 						<div class="freq-knob-row">
 							<AudioControls {radioId} {rxVolume} {txGain} audioManager={audioMgr} />
-							<FrequencyDisplay freq={radio.freq} {controlWs} {presets} />
+							<div class="freq-dsp-col">
+								<FrequencyDisplay freq={radio.freq} {controlWs} {presets} />
+								<RxDspPillRow {rxDspChain} on:change={(e) => handleRxDspChange(e.detail)} />
+							</div>
 							<TuningKnob freq={radio.freq} {controlWs} />
 						</div>
-						<RxDspPillRow {rxDspChain} on:change={(e) => handleRxDspChange(e.detail)} />
 					</div>
 					<div class="control-block">
 						<BandSelector {controlWs} currentFreq={radio.freq} {region} {enabledBands} />
@@ -428,10 +430,12 @@
 								<div class="inner-block">
 									<div class="freq-knob-row">
 										<AudioControls {radioId} {rxVolume} {txGain} audioManager={audioMgr} />
-										<FrequencyDisplay freq={radio.freq} {controlWs} {presets} />
+										<div class="freq-dsp-col">
+											<FrequencyDisplay freq={radio.freq} {controlWs} {presets} />
+											<RxDspPillRow {rxDspChain} on:change={(e) => handleRxDspChange(e.detail)} />
+										</div>
 										<TuningKnob freq={radio.freq} {controlWs} />
 									</div>
-									<RxDspPillRow {rxDspChain} on:change={(e) => handleRxDspChange(e.detail)} />
 								</div>
 							{:else if panel.component === 'band-selector'}
 								<div class="inner-block">
@@ -632,6 +636,14 @@
 		display: flex;
 		align-items: center;
 		gap: 12px;
+	}
+
+	.freq-dsp-col {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		flex: 1;
+		min-width: 0;
 	}
 
 	/* Narrow single-column fallback */
