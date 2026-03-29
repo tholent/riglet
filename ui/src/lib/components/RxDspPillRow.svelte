@@ -173,7 +173,7 @@
 	filter="highpass"
 	bind:open={() => openFilter === 'highpass', (v) => { if (!v) openFilter = null; }}
 	anchor={hpEl ?? null}
-	onchange={(e) => onPopoverChange('highpass', e.detail)}
+	onchange={(detail) => onPopoverChange('highpass', detail)}
 />
 
 <RxDspPopover
@@ -181,7 +181,7 @@
 	filter="lowpass"
 	bind:open={() => openFilter === 'lowpass', (v) => { if (!v) openFilter = null; }}
 	anchor={lpEl ?? null}
-	onchange={(e) => onPopoverChange('lowpass', e.detail)}
+	onchange={(detail) => onPopoverChange('lowpass', detail)}
 />
 
 <RxDspPopover
@@ -189,7 +189,7 @@
 	filter="peak"
 	bind:open={() => openFilter === 'peak', (v) => { if (!v) openFilter = null; }}
 	anchor={peakEl ?? null}
-	onchange={(e) => onPopoverChange('peak', e.detail)}
+	onchange={(detail) => onPopoverChange('peak', detail)}
 />
 
 <RxDspPopover
@@ -197,7 +197,7 @@
 	filter="noiseBlanker"
 	bind:open={() => openFilter === 'noiseBlanker', (v) => { if (!v) openFilter = null; }}
 	anchor={nbEl ?? null}
-	onchange={(e) => onPopoverChange('noiseBlanker', e.detail)}
+	onchange={(detail) => onPopoverChange('noiseBlanker', detail)}
 />
 
 <RxDspPopover
@@ -205,7 +205,7 @@
 	filter="notch"
 	bind:open={() => openFilter === 'notch', (v) => { if (!v) openFilter = null; }}
 	anchor={notchEl ?? null}
-	onchange={(e) => onPopoverChange('notch', e.detail)}
+	onchange={(detail) => onPopoverChange('notch', detail)}
 />
 
 <RxDspPopover
@@ -213,7 +213,7 @@
 	filter="bandpass"
 	bind:open={() => openFilter === 'bandpass', (v) => { if (!v) openFilter = null; }}
 	anchor={bpEl ?? null}
-	onchange={(e) => onPopoverChange('bandpass', e.detail)}
+	onchange={(detail) => onPopoverChange('bandpass', detail)}
 />
 
 <RxDspPopover
@@ -221,7 +221,7 @@
 	filter="nr"
 	bind:open={() => openFilter === 'nr', (v) => { if (!v) openFilter = null; }}
 	anchor={nrEl ?? null}
-	onchange={(e) => onPopoverChange('nr', e.detail)}
+	onchange={(detail) => onPopoverChange('nr', detail)}
 />
 
 <style>
