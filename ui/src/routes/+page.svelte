@@ -4,7 +4,8 @@
 	import { getStatus, getConfig, getRadioCat, getPresets, postAudioVolume, getDspConfig } from '$lib/api.js';
 	import type { RxDspConfig, TxDspConfig } from '$lib/api.js';
 	import { DspPersistence } from '$lib/dsp-persistence.js';
-	import { radioState, appConfig } from '$lib/stores.js';
+	import { radioState, appConfig, theme } from '$lib/stores.js';
+	import { setTheme } from '$lib/theme.js';
 	import { ControlWebSocket, AudioWebSocket } from '$lib/websocket.js';
 	import { AudioManager } from '$lib/audio/audio-manager.js';
 	import { activeLayout } from '$lib/layout/store.js';
@@ -13,22 +14,16 @@
 	import FrequencyDisplay from '$lib/components/FrequencyDisplay.svelte';
 	import BandSelector from '$lib/components/BandSelector.svelte';
 	import ModeSelector from '$lib/components/ModeSelector.svelte';
-	import PttButton from '$lib/components/PttButton.svelte';
-	import SmeterDisplay from '$lib/components/SmeterDisplay.svelte';
+	import PttPanel from '$lib/components/PttPanel.svelte';
 	import AudioControls from '$lib/components/AudioControls.svelte';
-	import LufsMeter from '$lib/components/LufsMeter.svelte';
-	import DspPanel from '$lib/components/DspPanel.svelte';
 	import RxDspPillRow from '$lib/components/RxDspPillRow.svelte';
-	import TxDspPanel from '$lib/components/TxDspPanel.svelte';
 	import PresetSelector from '$lib/components/PresetSelector.svelte';
 	import VfoSelector from '$lib/components/VfoSelector.svelte';
 	import CatExtended from '$lib/components/CatExtended.svelte';
 	import TuningKnob from '$lib/components/TuningKnob.svelte';
-	import Knob from '$lib/components/Knob.svelte';
 	import LayoutManager from '$lib/components/LayoutManager.svelte';
 	import type { VisualizationMode } from '$lib/viz/types.js';
 	import type { RadioState, PresetConfig } from '$lib/types.js';
-	import type { DspChain } from '$lib/audio/dsp-chain.js';
 	import type { RxDspChain } from '$lib/audio/rx-dsp-chain.js';
 	import type { TxDspChain } from '$lib/audio/tx-dsp-chain.js';
 
@@ -49,6 +44,16 @@
 	let rxVolume = $state(50);
 	let txGain = $state(50);
 
+	// Tracks the *resolved* theme ('dark' | 'light') — the store may hold 'system'.
+	let resolvedTheme = $state<'dark' | 'light'>('dark');
+
+	function toggleTheme() {
+		const next = resolvedTheme === 'dark' ? 'light' : 'dark';
+		setTheme(next);
+		theme.set(next);
+		resolvedTheme = next;
+	}
+
 	let txGainTimer: ReturnType<typeof setTimeout> | null = null;
 	function onTxGainChange(v: number) {
 		txGain = v;
@@ -68,6 +73,10 @@
 	}
 
 	function handleTxDspChange(detail: { param: string; value: unknown }): void {
+		if (detail.param === 'mic_mute') {
+			audioMgr?.setMicMute(detail.value as boolean);
+			return;
+		}
 		if (!dspPersistence) return;
 		const patch: Partial<TxDspConfig> = { [detail.param]: detail.value } as Partial<TxDspConfig>;
 		dspPersistence.saveTx(patch);
@@ -76,7 +85,6 @@
 	let controlWs: ControlWebSocket | null = $state(null);
 	let audioWs: AudioWebSocket | null = null;
 	let audioMgr: AudioManager | null = $state(null);
-	let dspChain: DspChain | null = $state(null);
 	let rxDspChain: RxDspChain | null = $state(null);
 	let txDspChain: TxDspChain | null = $state(null);
 	let dspPersistence: DspPersistence | null = null;
@@ -122,7 +130,7 @@
 		if (m.mode !== undefined) radio = { ...radio, mode: m.mode as string };
 		if (m.ptt !== undefined) radio = { ...radio, ptt: m.ptt as boolean };
 		if (m.online !== undefined) radio = { ...radio, online: m.online as boolean };
-		if (m.smeter !== undefined) radio = { ...radio, smeter: m.smeter as number };
+		if (m.smeter_s !== undefined) radio = { ...radio, smeter: m.smeter_s as number };
 		if (m.vfo !== undefined) radio = { ...radio, vfo: m.vfo as string };
 		if (m.swr !== undefined) radio = { ...radio, swr: m.swr as number };
 		if (m.ctcss_tone !== undefined) radio = { ...radio, ctcss_tone: m.ctcss_tone as number };
@@ -133,6 +141,9 @@
 	onDestroy(() => mountCleanup?.());
 
 	onMount(async () => {
+		// Sync resolved theme from data-theme attribute set by initTheme() in layout
+		resolvedTheme = (document.documentElement.getAttribute('data-theme') ?? 'dark') as 'dark' | 'light';
+
 		// Check setup_required
 		try {
 			const status = await getStatus();
@@ -198,6 +209,7 @@
 		if (radio.simulation) {
 			// Simulated radio: mic is the audio source (RX path)
 			audioMgr.onRxPcmFloat = (f32: Float32Array) => { latestPcm = f32; };
+			// getFloatFrequencyData returns dBFS (~-100 to 0); renderers handle dB values directly
 			audioMgr.onSimFftBins = (bins: Float32Array) => { simFftBins = bins; };
 			await audioMgr.startMicAsRx();
 
@@ -228,6 +240,10 @@
 			}
 
 			dspPersistence = new DspPersistence(radioId);
+
+			// Start TX DSP chain so controls are available even in simulation
+			await audioMgr.startTx();
+			txDspChain = audioMgr.getTxDspChain();
 
 			mountCleanup = () => {
 				cws.disconnect();
@@ -370,6 +386,12 @@
 			{radio.online ? (radio.simulation ? 'SIM' : 'ONLINE') : 'OFFLINE'}
 		</span>
 		<LayoutManager />
+		<button
+			class="theme-btn"
+			onclick={toggleTheme}
+			title={resolvedTheme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+			aria-label={resolvedTheme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+		>{resolvedTheme === 'dark' ? '☀' : '☾'}</button>
 		<a href="/setup" class="setup-btn" title="Open setup wizard" aria-label="Setup / configuration">⚙</a>
 	</header>
 
@@ -397,18 +419,16 @@
 					<div class="control-block">
 						<PresetSelector {radioId} currentFreqMhz={radio.freq} {controlWs} onPresetsChange={(p) => { presets = p; }} />
 					</div>
-					<VisualizationPanel bind:mode={vizMode} {radioId} cursorMhz={radio.freq} radioMode={radio.mode} pcmSamples={radio.ptt ? txPcm : latestPcm} fftBins={simFftBins} />
-					<div class="control-block ptt-row">
-						<PttButton ptt={radio.ptt} {controlWs} />
-						<Knob value={txGain} min={0} max={100} step={5} label="Mic Gain" size={72} onchange={onTxGainChange} />
-						<TxDspPanel {txDspChain} on:change={(e) => handleTxDspChange(e.detail)} />
-					</div>
-					<div class="control-block">
-						<SmeterDisplay smeter={radio.smeter ?? 0} />
-					</div>
-					<div class="control-block">
-						<DspPanel dspChain={dspChain} />
-					</div>
+					<VisualizationPanel bind:mode={vizMode} {radioId} smeter={radio.smeter ?? 0} cursorMhz={radio.freq} radioMode={radio.mode} pcmSamples={radio.ptt ? txPcm : latestPcm} fftBins={simFftBins} />
+					<PttPanel
+						ptt={radio.ptt}
+						{controlWs}
+						{txGain}
+						{txDspChain}
+						txPcm={txPcm}
+						{onTxGainChange}
+						onTxDspChange={handleTxDspChange}
+					/>
 				</div>
 			{:else}
 				<!-- Dynamic layout: outer grid sets column widths; each column scrolls independently -->
@@ -423,9 +443,10 @@
 						<div
 							class="layout-panel"
 							class:viz-panel={panel.component === 'visualization'}
+							class:preset-panel={panel.component === 'presets'}
 						>
 							{#if panel.component === 'visualization'}
-								<VisualizationPanel bind:mode={vizMode} {radioId} cursorMhz={radio.freq} radioMode={radio.mode} pcmSamples={radio.ptt ? txPcm : latestPcm} fftBins={simFftBins} />
+								<VisualizationPanel bind:mode={vizMode} {radioId} smeter={radio.smeter ?? 0} cursorMhz={radio.freq} radioMode={radio.mode} pcmSamples={radio.ptt ? txPcm : latestPcm} fftBins={simFftBins} />
 							{:else if panel.component === 'frequency'}
 								<div class="inner-block">
 									<div class="freq-knob-row">
@@ -446,29 +467,27 @@
 									<ModeSelector mode={radio.mode} {controlWs} {radioId} />
 								</div>
 							{:else if panel.component === 'ptt'}
-								<div class="inner-block ptt-row">
-									<PttButton ptt={radio.ptt} {controlWs} />
-									<Knob value={txGain} min={0} max={100} step={5} label="Mic Gain" size={72} onchange={onTxGainChange} />
-									<TxDspPanel {txDspChain} on:change={(e) => handleTxDspChange(e.detail)} />
-								</div>
+								<PttPanel
+									ptt={radio.ptt}
+									{controlWs}
+									{txGain}
+									{txDspChain}
+									txPcm={txPcm}
+									{onTxGainChange}
+									onTxDspChange={handleTxDspChange}
+								/>
 							{:else if panel.component === 'smeter'}
-								<div class="inner-block">
-									<SmeterDisplay smeter={radio.smeter ?? 0} />
-								</div>
+								<!-- S-meter is now the sidebar of VisualizationPanel -->
 							{:else if panel.component === 'audio'}
 								<div class="inner-block">
 									<AudioControls {radioId} {rxVolume} {txGain} audioManager={audioMgr} />
 								</div>
 							{:else if panel.component === 'dsp'}
-								<div class="inner-block">
-									<DspPanel dspChain={dspChain} />
-								</div>
+								<!-- legacy dsp panel removed -->
 							{:else if panel.component === 'lufs-meter'}
-								<div class="inner-block">
-									<LufsMeter pcmSamples={latestPcm} />
-								</div>
+								<!-- LUFS meter is now part of PttPanel -->
 							{:else if panel.component === 'presets'}
-								<div class="inner-block">
+								<div class="inner-block preset-inner">
 									<PresetSelector {radioId} currentFreqMhz={radio.freq} {controlWs} onPresetsChange={(p) => { presets = p; }} />
 								</div>
 							{:else if panel.component === 'vfo'}
@@ -524,8 +543,8 @@
 
 	:global(body) {
 		margin: 0;
-		background: #0d0d0d;
-		color: #e0e0e0;
+		background: var(--bg-primary);
+		color: var(--text-primary);
 		font-family: system-ui, sans-serif;
 	}
 
@@ -541,18 +560,18 @@
 		align-items: center;
 		gap: 12px;
 		padding: 10px 20px;
-		background: #1a1a1a;
-		border-bottom: 1px solid #333;
+		background: var(--bg-secondary);
+		border-bottom: 1px solid var(--border-primary);
 	}
 
 	.brand {
 		font-weight: 700;
 		font-size: 1.1rem;
-		color: #4a9eff;
+		color: var(--accent);
 	}
 
 	.radio-name {
-		color: #ccc;
+		color: var(--text-secondary);
 		font-size: 0.95rem;
 	}
 
@@ -563,12 +582,12 @@
 		font-size: 0.75rem;
 		font-weight: 700;
 		letter-spacing: 0.05em;
-		border: 1px solid #444;
-		color: #888;
+		border: 1px solid var(--border-primary);
+		color: var(--text-muted);
 	}
 
-	.status-pill.online { border-color: #4caf50; color: #4caf50; }
-	.status-pill.offline { border-color: #f44336; color: #f44336; }
+	.status-pill.online { border-color: var(--online-color); color: var(--online-color); }
+	.status-pill.offline { border-color: var(--offline-color); color: var(--offline-color); }
 
 	main {
 		flex: 1;
@@ -600,7 +619,7 @@
 		overflow-y: auto;
 		overflow-x: hidden;
 		scrollbar-width: thin;
-		scrollbar-color: #2a2a2a transparent;
+		scrollbar-color: var(--border-primary) transparent;
 	}
 
 	.layout-panel {
@@ -616,14 +635,27 @@
 		min-height: 200px;
 	}
 
+	/* Preset panel fills remaining column height */
+	.layout-panel.preset-panel {
+		flex: 1;
+		min-height: 80px;
+		display: flex;
+		flex-direction: column;
+	}
+
 	/* Panels that are not the visualization get block padding */
 	.inner-block {
-		background: #1a1a1a;
-		border: 1px solid #2a2a2a;
+		background: var(--bg-secondary);
+		border: 1px solid var(--border-primary);
 		border-radius: 0;
 		padding: 10px 12px;
 		height: 100%;
 		box-sizing: border-box;
+	}
+
+	.inner-block.preset-inner {
+		display: flex;
+		flex-direction: column;
 	}
 
 	.ptt-row {
@@ -656,8 +688,8 @@
 	}
 
 	.control-block {
-		background: #1a1a1a;
-		border-bottom: 1px solid #2a2a2a;
+		background: var(--bg-secondary);
+		border-bottom: 1px solid var(--border-primary);
 		padding: 10px 12px;
 	}
 
@@ -666,23 +698,23 @@
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		color: #888;
+		color: var(--text-muted);
 	}
 
-	.no-radio a { color: #4a9eff; }
+	.no-radio a { color: var(--accent); }
 
 	.footer {
 		flex-shrink: 0;
 		padding: 6px 20px;
-		background: #1a1a1a;
-		border-top: 1px solid #2a2a2a;
+		background: var(--bg-secondary);
+		border-top: 1px solid var(--border-primary);
 		font-size: 0.7rem;
-		color: #555;
+		color: var(--text-muted);
 		text-align: center;
 	}
 
 	.footer a {
-		color: #4a9eff;
+		color: var(--accent);
 		text-decoration: none;
 	}
 
@@ -690,28 +722,35 @@
 		text-decoration: underline;
 	}
 
+	.theme-btn,
 	.setup-btn {
 		display: flex;
 		align-items: center;
 		justify-content: center;
 		width: 28px;
 		height: 28px;
-		border: 1px solid #444;
+		border: 1px solid var(--border-primary);
 		border-radius: 4px;
-		background: #1a1a1a;
-		color: #888;
+		background: var(--bg-secondary);
+		color: var(--text-muted);
 		font-size: 1rem;
 		text-decoration: none;
 		transition: border-color 0.1s, color 0.1s;
 	}
 
-	.setup-btn:hover {
-		border-color: #666;
-		color: #ccc;
+	.theme-btn {
+		cursor: pointer;
 	}
 
+	.theme-btn:hover,
+	.setup-btn:hover {
+		border-color: var(--text-secondary);
+		color: var(--text-primary);
+	}
+
+	.theme-btn:focus-visible,
 	.setup-btn:focus-visible {
-		outline: 2px solid #4a9eff;
+		outline: 2px solid var(--accent);
 		outline-offset: 2px;
 	}
 

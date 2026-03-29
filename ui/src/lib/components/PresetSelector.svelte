@@ -215,6 +215,9 @@
 	.preset-selector {
 		font-size: 0.82rem;
 		color: #ccc;
+		height: 100%;
+		display: flex;
+		flex-direction: column;
 	}
 
 	.toolbar {
@@ -223,6 +226,7 @@
 		gap: 6px;
 		flex-wrap: wrap;
 		margin-bottom: 8px;
+		flex-shrink: 0;
 	}
 
 	.label {
@@ -257,7 +261,7 @@
 		display: flex;
 		flex-direction: column;
 		gap: 4px;
-		max-height: 220px;
+		flex: 1;
 		overflow-y: auto;
 	}
 
