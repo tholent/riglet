@@ -125,6 +125,14 @@ export class Spectrogram3dRenderer implements Renderer {
 		const h = this.height;
 
 		this._clear();
+
+		// Corner label
+		ctx.fillStyle = 'rgba(150,150,150,0.6)';
+		ctx.font = '10px monospace';
+		ctx.textAlign = 'left';
+		ctx.textBaseline = 'top';
+		ctx.fillText('3D Spectrogram', 4, 4);
+
 		if (this.frames.length === 0) return;
 
 		const numFrames = this.frames.length;
