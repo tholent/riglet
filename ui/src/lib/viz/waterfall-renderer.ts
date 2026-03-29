@@ -14,21 +14,18 @@ import { computePassband, drawPassbandOverlay } from './cursor.js';
 
 const AXIS_HEIGHT = 28;
 
-// dBFS range used for normalization when bins come from Web Audio AnalyserNode
-const DBFS_MIN = -120;
-const DBFS_MAX = 0;
-
-/** Map a magnitude value to an RGB triple.
- *  Accepts either normalised [0,1] or dBFS (< 0) from getFloatFrequencyData. */
-function binToRgb(v: number): [number, number, number] {
-	// Normalize dBFS input (e.g. from simulation mode AnalyserNode)
-	let norm: number;
-	if (v <= 0 && v < -0.001) {
-		norm = Math.max(0, Math.min(1, (v - DBFS_MIN) / (DBFS_MAX - DBFS_MIN)));
+/** Map a magnitude value to an RGB triple using a floor/ceiling dB window.
+ *  Accepts normalised [0,1] (from server) or raw dBFS (< 0) from getFloatFrequencyData. */
+function binToRgb(v: number, floorDb: number, ceilDb: number): [number, number, number] {
+	// Convert to dB
+	let db: number;
+	if (v < 0) {
+		db = v; // already dBFS from AnalyserNode
 	} else {
-		norm = Math.max(0, Math.min(1, v));
+		db = v > 0 ? 20 * Math.log10(v) : -160;
 	}
-	const c = norm;
+	// Map [floorDb, ceilDb] → [0, 1]
+	const c = Math.max(0, Math.min(1, (db - floorDb) / (ceilDb - floorDb)));
 	if (c < 0.5) {
 		const t = c * 2;
 		return [Math.round(t * 255), Math.round(t * 200), Math.round((1 - t) * 200)];
@@ -57,6 +54,14 @@ export class WaterfallRenderer implements Renderer {
 	/** Tuned frequency in MHz; 0 means use centerMhz (cursor at centre). */
 	private cursorMhz = 0;
 
+	// Speed: only render every frameSkip-th frame
+	private frameSkip = 1;
+	private frameCount = 0;
+
+	// dB window for color mapping
+	private floorDb = -100;
+	private ceilDb = 0;
+
 	init(context: RendererContext): void {
 		this.ctx = context.ctx;
 		this.width = context.width;
@@ -70,6 +75,9 @@ export class WaterfallRenderer implements Renderer {
 	render(data: VisualizationData): void {
 		if (!this.ctx || !this.imageData) return;
 		if (!data.fftBins) return;
+
+		this.frameCount++;
+		if (this.frameCount % this.frameSkip !== 0) return;
 
 		this._scrollAndDraw(data.fftBins);
 		this._drawAxis();
@@ -86,6 +94,25 @@ export class WaterfallRenderer implements Renderer {
 	updateFreq(centerMhz: number, spanKhz: number): void {
 		this.centerMhz = centerMhz;
 		this.spanKhz = spanKhz;
+	}
+
+	/** Called by VisualizationPanel when cursor/mode changes. */
+	updateCursor(cursorMhz: number, mode: string): void {
+		this.cursorMhz = cursorMhz;
+		this.radioMode = mode;
+	}
+
+	/** Set how many incoming frames to skip between rendered rows.
+	 *  1 = every frame (fastest), 8 = one row per 8 frames (slowest). */
+	setSpeed(framesPerRow: number): void {
+		this.frameSkip = Math.max(1, Math.round(framesPerRow));
+	}
+
+	/** Set the dB window used for the color scale.
+	 *  Energy below floorDb maps to black; at or above ceilDb maps to full red. */
+	setRange(floorDb: number, ceilDb: number): void {
+		this.floorDb = floorDb;
+		this.ceilDb = Math.max(floorDb + 1, ceilDb); // ensure floor < ceil
 	}
 
 	destroy(): void {
@@ -124,7 +151,7 @@ export class WaterfallRenderer implements Renderer {
 			const hi = Math.min(lo + 1, n - 1);
 			const frac = t - lo;
 			const val = (bins[lo] ?? 0) * (1 - frac) + (bins[hi] ?? 0) * frac;
-			const [r, g, b] = binToRgb(val);
+			const [r, g, b] = binToRgb(val, this.floorDb, this.ceilDb);
 			const offset = x * 4;
 			data[offset] = r;
 			data[offset + 1] = g;
@@ -132,12 +159,6 @@ export class WaterfallRenderer implements Renderer {
 			data[offset + 3] = 255;
 		}
 		this.ctx.putImageData(this.imageData, 0, 0);
-	}
-
-	/** Update the cursor/tuned frequency (call from VisualizationPanel on state changes). */
-	updateCursor(cursorMhz: number, mode: string): void {
-		this.cursorMhz = cursorMhz;
-		this.radioMode = mode;
 	}
 
 	private _drawAxis(): void {

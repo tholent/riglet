@@ -41,6 +41,37 @@
 	}: Props = $props();
 
 	// ---------------------------------------------------------------------------
+	// Waterfall controls (speed, dB floor/ceiling)
+	// ---------------------------------------------------------------------------
+	const WF_SPEED_KEY = 'riglet:wfSpeed';
+	const WF_FLOOR_KEY = 'riglet:wfFloor';
+	const WF_CEIL_KEY = 'riglet:wfCeil';
+
+	function loadNum(key: string, def: number): number {
+		try { const v = Number(localStorage.getItem(key)); return isNaN(v) ? def : v; } catch { return def; }
+	}
+
+	let wfSpeed = $state(loadNum(WF_SPEED_KEY, 1));   // frames to skip per row
+	let wfFloor = $state(loadNum(WF_FLOOR_KEY, -100)); // dB floor
+	let wfCeil  = $state(loadNum(WF_CEIL_KEY, 0));     // dB ceiling
+
+	// Sync waterfall renderer whenever controls change
+	$effect(() => {
+		const speed = wfSpeed;
+		const floor = wfFloor;
+		const ceil  = wfCeil;
+		if (renderer && 'setSpeed' in renderer) {
+			(renderer as WaterfallRenderer).setSpeed(speed);
+			(renderer as WaterfallRenderer).setRange(floor, ceil);
+		}
+		try {
+			localStorage.setItem(WF_SPEED_KEY, String(speed));
+			localStorage.setItem(WF_FLOOR_KEY, String(floor));
+			localStorage.setItem(WF_CEIL_KEY, String(ceil));
+		} catch { /* ignore */ }
+	});
+
+	// ---------------------------------------------------------------------------
 	// LUFS position (left / right)
 	// ---------------------------------------------------------------------------
 	const LUFS_POSITION_KEY = 'riglet:lufsPosition';
@@ -161,6 +192,11 @@
 		try {
 			renderer = createRenderer(newMode);
 			renderer.init(ctx);
+			// Apply waterfall controls to freshly-created renderer
+			if ('setSpeed' in renderer) {
+				(renderer as WaterfallRenderer).setSpeed(wfSpeed);
+				(renderer as WaterfallRenderer).setRange(wfFloor, wfCeil);
+			}
 		} catch (e) {
 			console.warn('[VisualizationPanel] Failed to create renderer:', e);
 		}
@@ -295,6 +331,27 @@
 
 		<!-- Main visualization canvas -->
 		<canvas bind:this={canvas} class="viz-canvas"></canvas>
+
+		<!-- Waterfall controls overlay -->
+		{#if mode === 'waterfall'}
+		<div class="wf-controls">
+			<label class="wf-label">
+				<span>Speed</span>
+				<input type="range" min="1" max="8" step="1" bind:value={wfSpeed} />
+				<span class="wf-val">{wfSpeed}×</span>
+			</label>
+			<label class="wf-label">
+				<span>Floor</span>
+				<input type="range" min="-140" max="-10" step="5" bind:value={wfFloor} />
+				<span class="wf-val">{wfFloor}</span>
+			</label>
+			<label class="wf-label">
+				<span>Ceil</span>
+				<input type="range" min="-80" max="0" step="5" bind:value={wfCeil} />
+				<span class="wf-val">{wfCeil}</span>
+			</label>
+		</div>
+		{/if}
 	</div>
 
 	{#if lufsPosition === 'right'}
@@ -324,6 +381,7 @@
 		overflow: hidden;
 		display: flex;
 		flex-direction: column;
+		position: relative;
 	}
 
 	.viz-canvas {
@@ -332,6 +390,48 @@
 		flex: 1;
 		min-height: 0;
 		image-rendering: pixelated;
+	}
+
+	/* ---- waterfall controls overlay ---- */
+	.wf-controls {
+		position: absolute;
+		top: 4px;
+		right: 4px;
+		display: flex;
+		flex-direction: column;
+		gap: 3px;
+		background: rgba(0, 0, 0, 0.65);
+		border: 1px solid #333;
+		border-radius: 4px;
+		padding: 5px 7px;
+		z-index: 10;
+		pointer-events: auto;
+	}
+
+	.wf-label {
+		display: flex;
+		align-items: center;
+		gap: 5px;
+		color: #888;
+		font-size: 0.62rem;
+		font-family: monospace;
+		white-space: nowrap;
+	}
+
+	.wf-label span:first-child {
+		width: 2.8em;
+		text-align: right;
+	}
+
+	.wf-label input[type='range'] {
+		width: 80px;
+		accent-color: #4a9eff;
+		cursor: pointer;
+	}
+
+	.wf-val {
+		width: 3.5em;
+		color: #bbb;
 	}
 
 	/* ---- spectrum strip ---- */
