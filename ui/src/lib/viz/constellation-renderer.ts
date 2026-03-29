@@ -134,6 +134,23 @@ export class ConstellationRenderer implements Renderer {
 		ctx.arc(cx, cy, radius, 0, Math.PI * 2);
 		ctx.stroke();
 
+		// Axis labels (auto-scaled values)
+		ctx.fillStyle = 'rgba(120,120,120,0.7)';
+		ctx.font = '9px monospace';
+		ctx.textBaseline = 'top';
+
+		ctx.textAlign = 'left';
+		ctx.fillText('-1', cx - radius + 2, cy + 3);
+		ctx.textAlign = 'center';
+		ctx.fillText('0', cx, cy + 3);
+		ctx.textAlign = 'right';
+		ctx.fillText('+1', cx + radius - 2, cy + 3);
+
+		ctx.textAlign = 'left';
+		ctx.textBaseline = 'middle';
+		ctx.fillText('+1', cx + 3, cy - radius);
+		ctx.fillText('-1', cx + 3, cy + radius);
+
 		ctx.restore();
 	}
 }

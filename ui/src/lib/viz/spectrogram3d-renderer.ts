@@ -57,6 +57,10 @@ export class Spectrogram3dRenderer implements Renderer {
 	private floorDb = -100;
 	private ceilDb = 0;
 
+	// Stored from the most recent render call for axis labelling
+	private sampleRate = 16000;
+	private numBins = 0;
+
 	init(context: RendererContext): void {
 		this.ctx = context.ctx;
 		this.width = context.width;
@@ -67,8 +71,10 @@ export class Spectrogram3dRenderer implements Renderer {
 
 	render(data: VisualizationData): void {
 		if (!this.ctx) return;
+		if (data.sampleRate) this.sampleRate = data.sampleRate;
 
 		if (data.fftBins && data.fftBins.length > 0) {
+			this.numBins = data.fftBins.length;
 			this.frameCount++;
 			if (this.frameCount % this.frameSkip === 0) {
 				const bins = data.fftBins;
@@ -135,17 +141,35 @@ export class Spectrogram3dRenderer implements Renderer {
 		ctx.textBaseline = 'top';
 		ctx.fillText('3D Spectrogram', 4, 4);
 
-		if (this.frames.length === 0) return;
-
-		const numFrames = this.frames.length;
-
-		// One-point perspective geometry
+		// One-point perspective geometry (defined early so axis can use it)
 		const vanishX = w / 2;
 		const vanishY = h * HORIZON_FRAC;
 		const frontY = h - 4;
 		const margin = 6;
 		const frontLeft = margin;
 		const frontRight = w - margin;
+
+		// Front-edge frequency axis
+		if (this.numBins > 0) {
+			const nyquistKhz = this.sampleRate / 2000;
+			const ticks = [0, 0.25, 0.5, 0.75, 1.0];
+			for (const t of ticks) {
+				const x = frontLeft + t * (frontRight - frontLeft);
+				const freqKhz = t * nyquistKhz;
+				const label = freqKhz >= 1 ? `${freqKhz.toFixed(1)}k` : `${Math.round(freqKhz * 1000)}`;
+				ctx.fillStyle = 'rgba(80,80,80,0.8)';
+				ctx.fillRect(Math.round(x), Math.round(frontY), 1, 4);
+				ctx.fillStyle = 'rgba(120,120,120,0.8)';
+				ctx.font = '9px monospace';
+				ctx.textBaseline = 'top';
+				ctx.textAlign = t === 0 ? 'left' : t === 1 ? 'right' : 'center';
+				ctx.fillText(label, x, frontY + 5);
+			}
+		}
+
+		if (this.frames.length === 0) return;
+
+		const numFrames = this.frames.length;
 
 		// Maximum amplitude height for the front frame
 		const maxAmpH = (frontY - vanishY) * 0.55;
