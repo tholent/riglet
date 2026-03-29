@@ -54,6 +54,7 @@
 	let wfSpeed = $state(loadNum(WF_SPEED_KEY, 1));   // frames to skip per row
 	let wfFloor = $state(loadNum(WF_FLOOR_KEY, -100)); // dB floor
 	let wfCeil  = $state(loadNum(WF_CEIL_KEY, 0));     // dB ceiling
+	let wfOpen  = $state(false);                        // controls popup open
 
 	// Sync waterfall renderer whenever controls change
 	$effect(() => {
@@ -332,24 +333,36 @@
 		<!-- Main visualization canvas -->
 		<canvas bind:this={canvas} class="viz-canvas"></canvas>
 
-		<!-- Waterfall controls overlay -->
+		<!-- Waterfall controls popup -->
 		{#if mode === 'waterfall'}
-		<div class="wf-controls">
-			<label class="wf-label">
-				<span>Speed</span>
-				<input type="range" min="1" max="8" step="1" bind:value={wfSpeed} />
-				<span class="wf-val">{wfSpeed}×</span>
-			</label>
-			<label class="wf-label">
-				<span>Floor</span>
-				<input type="range" min="-140" max="-10" step="5" bind:value={wfFloor} />
-				<span class="wf-val">{wfFloor}</span>
-			</label>
-			<label class="wf-label">
-				<span>Ceil</span>
-				<input type="range" min="-80" max="0" step="5" bind:value={wfCeil} />
-				<span class="wf-val">{wfCeil}</span>
-			</label>
+		<div class="wf-popup-wrap">
+			<button
+				class="wf-toggle"
+				class:wf-toggle-open={wfOpen}
+				onclick={() => wfOpen = !wfOpen}
+				title="Waterfall settings"
+				aria-label="Waterfall settings"
+			>⚙</button>
+			{#if wfOpen}
+			<div class="wf-controls">
+				<div class="wf-controls-title">Waterfall</div>
+				<label class="wf-label">
+					<span>Speed</span>
+					<input type="range" min="1" max="8" step="1" bind:value={wfSpeed} />
+					<span class="wf-val">{wfSpeed}×</span>
+				</label>
+				<label class="wf-label">
+					<span>Floor</span>
+					<input type="range" min="-140" max="-10" step="5" bind:value={wfFloor} />
+					<span class="wf-val">{wfFloor} dB</span>
+				</label>
+				<label class="wf-label">
+					<span>Ceil</span>
+					<input type="range" min="-80" max="0" step="5" bind:value={wfCeil} />
+					<span class="wf-val">{wfCeil} dB</span>
+				</label>
+			</div>
+			{/if}
 		</div>
 		{/if}
 	</div>
@@ -392,28 +405,58 @@
 		image-rendering: pixelated;
 	}
 
-	/* ---- waterfall controls overlay ---- */
-	.wf-controls {
+	/* ---- waterfall controls popup ---- */
+	.wf-popup-wrap {
 		position: absolute;
 		top: 4px;
 		right: 4px;
 		display: flex;
 		flex-direction: column;
-		gap: 3px;
-		background: rgba(0, 0, 0, 0.65);
-		border: 1px solid #333;
-		border-radius: 4px;
-		padding: 5px 7px;
+		align-items: flex-end;
+		gap: 2px;
 		z-index: 10;
+	}
+
+	.wf-toggle {
+		background: rgba(0, 0, 0, 0.6);
+		border: 1px solid #444;
+		border-radius: 3px;
+		color: #666;
+		font-size: 0.75rem;
+		line-height: 1;
+		padding: 3px 5px;
+		cursor: pointer;
+	}
+	.wf-toggle:hover { color: #ccc; border-color: #777; }
+	.wf-toggle:focus-visible { outline: 1px solid #4a9eff; outline-offset: 2px; }
+	.wf-toggle-open { color: #4a9eff; border-color: #4a9eff; }
+
+	.wf-controls {
+		display: flex;
+		flex-direction: column;
+		gap: 6px;
+		background: rgba(10, 10, 10, 0.92);
+		border: 1px solid #444;
+		border-radius: 4px;
+		padding: 8px 10px;
 		pointer-events: auto;
+	}
+
+	.wf-controls-title {
+		color: #666;
+		font-size: 0.6rem;
+		font-family: monospace;
+		text-transform: uppercase;
+		letter-spacing: 0.08em;
+		margin-bottom: 2px;
 	}
 
 	.wf-label {
 		display: flex;
 		align-items: center;
-		gap: 5px;
+		gap: 6px;
 		color: #888;
-		font-size: 0.62rem;
+		font-size: 0.65rem;
 		font-family: monospace;
 		white-space: nowrap;
 	}
@@ -424,13 +467,13 @@
 	}
 
 	.wf-label input[type='range'] {
-		width: 80px;
+		width: 90px;
 		accent-color: #4a9eff;
 		cursor: pointer;
 	}
 
 	.wf-val {
-		width: 3.5em;
+		width: 4.5em;
 		color: #bbb;
 	}
 
