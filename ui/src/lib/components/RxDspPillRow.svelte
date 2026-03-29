@@ -1,15 +1,28 @@
 <script lang="ts">
 	import type { RxDspChain } from '$lib/audio/rx-dsp-chain.js';
 	import { createEventDispatcher } from 'svelte';
+	import RxDspPopover from './RxDspPopover.svelte';
 
 	interface Props {
 		rxDspChain: RxDspChain | null;
 	}
 	let { rxDspChain }: Props = $props();
 
-	const dispatch = createEventDispatcher<{ change: { filter: string; enabled: boolean } }>();
+	const dispatch = createEventDispatcher<{ change: Record<string, unknown> }>();
 
-	// Local enabled state for each filter (drives pill appearance)
+	// Which popover is currently open
+	let openFilter = $state<string | null>(null);
+
+	// Pill button element refs for popover anchoring
+	let hpEl: HTMLButtonElement | undefined;
+	let lpEl: HTMLButtonElement | undefined;
+	let peakEl: HTMLButtonElement | undefined;
+	let nbEl: HTMLButtonElement | undefined;
+	let notchEl: HTMLButtonElement | undefined;
+	let bpEl: HTMLButtonElement | undefined;
+	let nrEl: HTMLButtonElement | undefined;
+
+	// Active state for each filter — reflects enabled state from the popover
 	let hpEnabled = $state(false);
 	let lpEnabled = $state(false);
 	let peakEnabled = $state(false);
@@ -18,63 +31,43 @@
 	let bpEnabled = $state(false);
 	let nrEnabled = $state(false);
 
-	// Popover anchor placeholder — Task 18 will wire per-filter popovers here
-	// let openPopover: string | null = $state(null);
+	type FilterKey =
+		| 'highpass'
+		| 'lowpass'
+		| 'peak'
+		| 'noiseBlanker'
+		| 'notch'
+		| 'bandpass'
+		| 'nr';
 
-	function toggle(
-		filter: string,
-		enabled: boolean,
-		applyFn: (chain: RxDspChain, val: boolean) => void,
-	): void {
+	function togglePopover(filter: FilterKey): void {
 		if (!rxDspChain) return;
-		applyFn(rxDspChain, enabled);
-		dispatch('change', { filter, enabled });
+		openFilter = openFilter === filter ? null : filter;
 	}
 
-	function toggleHp(): void {
-		if (!rxDspChain) return;
-		hpEnabled = !hpEnabled;
-		toggle('highpass', hpEnabled, (c, v) => c.enableHighpass(v));
+	function onPopoverChange(filter: FilterKey, detail: Record<string, unknown>): void {
+		// Sync enabled state back to the pill
+		const en = detail.enabled as boolean;
+		switch (filter) {
+			case 'highpass':    hpEnabled = en; break;
+			case 'lowpass':     lpEnabled = en; break;
+			case 'peak':        peakEnabled = en; break;
+			case 'noiseBlanker': nbEnabled = en; break;
+			case 'notch':       notchEnabled = en; break;
+			case 'bandpass':    bpEnabled = en; break;
+			case 'nr':          nrEnabled = en; break;
+		}
+		dispatch('change', { filter, ...detail });
 	}
 
-	function toggleLp(): void {
-		if (!rxDspChain) return;
-		lpEnabled = !lpEnabled;
-		toggle('lowpass', lpEnabled, (c, v) => c.enableLowpass(v));
-	}
-
-	function togglePeak(): void {
-		if (!rxDspChain) return;
-		peakEnabled = !peakEnabled;
-		toggle('peak', peakEnabled, (c, v) => c.enablePeak(v));
-	}
-
-	function toggleNb(): void {
-		if (!rxDspChain) return;
-		nbEnabled = !nbEnabled;
-		toggle('noiseBlanker', nbEnabled, (c, v) => c.enableNoiseBlanker(v));
-	}
-
-	function toggleNotch(): void {
-		if (!rxDspChain) return;
-		notchEnabled = !notchEnabled;
-		toggle('notch', notchEnabled, (c, v) => c.enableNotch(v));
-	}
-
-	function toggleBp(): void {
-		if (!rxDspChain) return;
-		bpEnabled = !bpEnabled;
-		toggle('bandpass', bpEnabled, (c, v) => c.enableBandpass(v));
-	}
-
-	function toggleNr(): void {
-		if (!rxDspChain) return;
-		nrEnabled = !nrEnabled;
-		toggle('nr', nrEnabled, (c, v) => c.enableNr(v));
-	}
+	// Keep openFilter falsy when chain goes away
+	$effect(() => {
+		if (!rxDspChain) openFilter = null;
+	});
 </script>
 
 <div class="pill-row" role="group" aria-label="RX DSP filter controls">
+
 	<button
 		class="pill"
 		class:active={hpEnabled}
@@ -82,7 +75,9 @@
 		disabled={!rxDspChain}
 		aria-pressed={hpEnabled}
 		aria-label="Highpass filter"
-		onclick={toggleHp}
+		aria-haspopup="dialog"
+		bind:this={hpEl}
+		onclick={() => togglePopover('highpass')}
 	>HP</button>
 
 	<button
@@ -92,7 +87,9 @@
 		disabled={!rxDspChain}
 		aria-pressed={lpEnabled}
 		aria-label="Lowpass filter"
-		onclick={toggleLp}
+		aria-haspopup="dialog"
+		bind:this={lpEl}
+		onclick={() => togglePopover('lowpass')}
 	>LP</button>
 
 	<button
@@ -102,7 +99,9 @@
 		disabled={!rxDspChain}
 		aria-pressed={peakEnabled}
 		aria-label="Peak filter"
-		onclick={togglePeak}
+		aria-haspopup="dialog"
+		bind:this={peakEl}
+		onclick={() => togglePopover('peak')}
 	>Peak</button>
 
 	<button
@@ -112,7 +111,9 @@
 		disabled={!rxDspChain}
 		aria-pressed={nbEnabled}
 		aria-label="Noise blanker"
-		onclick={toggleNb}
+		aria-haspopup="dialog"
+		bind:this={nbEl}
+		onclick={() => togglePopover('noiseBlanker')}
 	>NB</button>
 
 	<button
@@ -122,7 +123,9 @@
 		disabled={!rxDspChain}
 		aria-pressed={notchEnabled}
 		aria-label="Notch filter"
-		onclick={toggleNotch}
+		aria-haspopup="dialog"
+		bind:this={notchEl}
+		onclick={() => togglePopover('notch')}
 	>Notch</button>
 
 	<button
@@ -132,7 +135,9 @@
 		disabled={!rxDspChain}
 		aria-pressed={bpEnabled}
 		aria-label="Bandpass filter"
-		onclick={toggleBp}
+		aria-haspopup="dialog"
+		bind:this={bpEl}
+		onclick={() => togglePopover('bandpass')}
 	>BP</button>
 
 	<button
@@ -142,9 +147,70 @@
 		disabled={!rxDspChain}
 		aria-pressed={nrEnabled}
 		aria-label="Noise reduction"
-		onclick={toggleNr}
+		aria-haspopup="dialog"
+		bind:this={nrEl}
+		onclick={() => togglePopover('nr')}
 	>NR</button>
+
 </div>
+
+<!-- Popovers — one per filter, shown when openFilter matches -->
+
+<RxDspPopover
+	{rxDspChain}
+	filter="highpass"
+	bind:open={() => openFilter === 'highpass', (v) => { if (!v) openFilter = null; }}
+	anchor={hpEl ?? null}
+	onchange={(e) => onPopoverChange('highpass', e.detail)}
+/>
+
+<RxDspPopover
+	{rxDspChain}
+	filter="lowpass"
+	bind:open={() => openFilter === 'lowpass', (v) => { if (!v) openFilter = null; }}
+	anchor={lpEl ?? null}
+	onchange={(e) => onPopoverChange('lowpass', e.detail)}
+/>
+
+<RxDspPopover
+	{rxDspChain}
+	filter="peak"
+	bind:open={() => openFilter === 'peak', (v) => { if (!v) openFilter = null; }}
+	anchor={peakEl ?? null}
+	onchange={(e) => onPopoverChange('peak', e.detail)}
+/>
+
+<RxDspPopover
+	{rxDspChain}
+	filter="noiseBlanker"
+	bind:open={() => openFilter === 'noiseBlanker', (v) => { if (!v) openFilter = null; }}
+	anchor={nbEl ?? null}
+	onchange={(e) => onPopoverChange('noiseBlanker', e.detail)}
+/>
+
+<RxDspPopover
+	{rxDspChain}
+	filter="notch"
+	bind:open={() => openFilter === 'notch', (v) => { if (!v) openFilter = null; }}
+	anchor={notchEl ?? null}
+	onchange={(e) => onPopoverChange('notch', e.detail)}
+/>
+
+<RxDspPopover
+	{rxDspChain}
+	filter="bandpass"
+	bind:open={() => openFilter === 'bandpass', (v) => { if (!v) openFilter = null; }}
+	anchor={bpEl ?? null}
+	onchange={(e) => onPopoverChange('bandpass', e.detail)}
+/>
+
+<RxDspPopover
+	{rxDspChain}
+	filter="nr"
+	bind:open={() => openFilter === 'nr', (v) => { if (!v) openFilter = null; }}
+	anchor={nrEl ?? null}
+	onchange={(e) => onPopoverChange('nr', e.detail)}
+/>
 
 <style>
 	.pill-row {
