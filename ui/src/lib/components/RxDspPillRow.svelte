@@ -22,7 +22,7 @@
 	let bpEl = $state<HTMLButtonElement | undefined>(undefined);
 	let nrEl = $state<HTMLButtonElement | undefined>(undefined);
 
-	// Active state for each filter — reflects enabled state from the popover
+	// Active state for each filter — derived from chain, updated on popover change
 	let hpEnabled = $state(false);
 	let lpEnabled = $state(false);
 	let peakEnabled = $state(false);
@@ -30,6 +30,18 @@
 	let notchEnabled = $state(false);
 	let bpEnabled = $state(false);
 	let nrEnabled = $state(false);
+
+	// Sync enabled state from chain whenever it becomes available
+	$effect(() => {
+		if (!rxDspChain) return;
+		hpEnabled = rxDspChain.isHighpassEnabled();
+		lpEnabled = rxDspChain.isLowpassEnabled();
+		peakEnabled = rxDspChain.isPeakEnabled();
+		nbEnabled = rxDspChain.isNoiseBlankerEnabled();
+		notchEnabled = rxDspChain.isNotchEnabled();
+		bpEnabled = rxDspChain.isBandpassEnabled();
+		nrEnabled = rxDspChain.isNrEnabled();
+	});
 
 	type FilterKey =
 		| 'highpass'
@@ -221,11 +233,11 @@
 	}
 
 	.pill {
-		padding: 2px 9px;
-		border-radius: 99px;
-		border: 1px solid #444;
-		background: #1a1a1a;
-		color: #666;
+		padding: 3px 8px;
+		border-radius: 4px;
+		border: 1px solid #3a3a3a;
+		background: #252525;
+		color: #999;
 		font-size: 0.72rem;
 		font-weight: 600;
 		letter-spacing: 0.04em;
@@ -235,8 +247,9 @@
 	}
 
 	.pill:hover:not(.active):not(:disabled) {
-		border-color: #666;
-		color: #aaa;
+		border-color: #555;
+		background: #2e2e2e;
+		color: #ccc;
 	}
 
 	.pill.active {
