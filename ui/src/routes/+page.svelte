@@ -193,7 +193,6 @@
 		// Audio setup
 		audioMgr = new AudioManager();
 		await audioMgr.startRx();
-		dspChain = audioMgr.getDspChain();
 		rxDspChain = audioMgr.getRxDspChain();
 
 		if (radio.simulation) {

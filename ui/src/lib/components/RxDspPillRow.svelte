@@ -230,6 +230,8 @@
 		flex-wrap: wrap;
 		gap: 4px;
 		align-items: center;
+		justify-content: center;
+		padding-top: 6px;
 	}
 
 	.pill {
