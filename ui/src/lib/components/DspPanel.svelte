@@ -91,8 +91,8 @@
 	<details bind:open={filtersOpen}>
 		<summary class="section-header">
 			<span>Filters</span>
-			<label class="toggle" onclick={(e) => e.stopPropagation()}>
-				<input
+			<label class="toggle">
+				<input onclick={(e) => e.stopPropagation()}
 					type="checkbox"
 					bind:checked={filtersEnabled}
 					aria-label="Enable filters"
@@ -187,8 +187,8 @@
 	<details bind:open={nrOpen}>
 		<summary class="section-header">
 			<span>Noise Reduction</span>
-			<label class="toggle" onclick={(e) => e.stopPropagation()}>
-				<input
+			<label class="toggle">
+				<input onclick={(e) => e.stopPropagation()}
 					type="checkbox"
 					bind:checked={nrEnabled}
 					disabled={!dspChain?.isNrAvailable()}
@@ -222,8 +222,8 @@
 	<details bind:open={eqOpen}>
 		<summary class="section-header">
 			<span>EQ</span>
-			<label class="toggle" onclick={(e) => e.stopPropagation()}>
-				<input
+			<label class="toggle">
+				<input onclick={(e) => e.stopPropagation()}
 					type="checkbox"
 					bind:checked={eqEnabled}
 					aria-label="Enable equalizer"
@@ -284,8 +284,8 @@
 	<details bind:open={compressorOpen}>
 		<summary class="section-header">
 			<span>Compressor</span>
-			<label class="toggle" onclick={(e) => e.stopPropagation()}>
-				<input
+			<label class="toggle">
+				<input onclick={(e) => e.stopPropagation()}
 					type="checkbox"
 					bind:checked={compressorEnabled}
 					aria-label="Enable compressor"

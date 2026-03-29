@@ -241,7 +241,7 @@
 <a href="#main-content" class="skip-link">Skip to main content</a>
 
 <div class="app">
-	<header class="topbar" role="banner">
+	<header class="topbar">
 		<span class="brand">Riglet</span>
 		{#if state.name}
 			<span class="radio-name">{state.name}</span>

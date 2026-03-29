@@ -392,7 +392,7 @@ class RadioInstance:
         """Run forever: reconnect if needed, then poll and push to ws_control."""
         interval = self.config.polling_interval_ms / 1000.0
         reconnect_interval = 5.0
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
 
         while True:
             try:
