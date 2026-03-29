@@ -79,7 +79,6 @@
 	const R_TICK_OUTER = 58;
 	const R_TICK_INNER_MAJOR = 50;
 	const R_TICK_INNER_MINOR = 54;
-	const R_POINTER = 44;
 	const R_CAP = 18.75;
 
 	const NUM_TICKS = 36;
@@ -91,10 +90,10 @@
 		return { x: CX + r * Math.cos(rad), y: CY + r * Math.sin(rad) };
 	}
 
-	// Pointer tip angle: 0° = 12 o'clock, clockwise; converted to SVG (3 o'clock = 0°)
-	let pointerSvgDeg = $derived(angleDeg - 90);
-	let pointerTip = $derived(polarXY(pointerSvgDeg, R_POINTER));
-	let pointerNear = $derived(polarXY(pointerSvgDeg, 8));
+	// Indicator dimple angle: 0° = 12 o'clock, clockwise; converted to SVG (3 o'clock = 0°)
+	const R_DIMPLE = 37;
+	let dimpleSvgDeg = $derived(angleDeg - 90);
+	let dimplePos = $derived(polarXY(dimpleSvgDeg, R_DIMPLE));
 </script>
 
 <div class="tuning-wrap" role="presentation">
@@ -137,14 +136,8 @@
 		<!-- Inner highlight ring -->
 		<circle cx={CX} cy={CY} r={R_BODY - 4} fill="none" stroke="#222" stroke-width="1" />
 
-		<!-- Pointer line -->
-		<line
-			x1={pointerNear.x} y1={pointerNear.y}
-			x2={pointerTip.x} y2={pointerTip.y}
-			stroke="#4a9eff" stroke-width="2.5" stroke-linecap="round"
-		/>
-		<!-- Pointer tip dot -->
-		<circle cx={pointerTip.x} cy={pointerTip.y} r="3.5" fill="#4a9eff" />
+		<!-- Indicator dimple (orbits as knob rotates) -->
+		<circle cx={dimplePos.x} cy={dimplePos.y} r="12" fill="#0d0d0d" stroke="#444" stroke-width="1" />
 
 		<!-- Centre cap (click to cycle step) -->
 		<circle cx={CX} cy={CY} r={R_CAP} fill="#111" stroke="#3a3a3a" stroke-width="1" style="cursor:pointer" role="button" tabindex="-1" aria-label="Cycle tuning step" onpointerdown={(e) => { e.stopPropagation(); cycleStep(); }} />
