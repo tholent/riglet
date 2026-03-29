@@ -20,6 +20,7 @@
  */
 
 import { RxDspChain } from './rx-dsp-chain.js';
+import { TxDspChain } from './tx-dsp-chain.js';
 
 /** Configuration for the squelch audio gate. */
 export interface SquelchParams {
@@ -43,6 +44,9 @@ export class AudioManager {
 
 	// DSP filter/EQ chain (RX path)
 	private rxDspChain: RxDspChain | null = null;
+
+	// DSP chain (TX path)
+	private txDspChain: TxDspChain | null = null;
 
 	private micStream: MediaStream | null = null;
 	private micSource: MediaStreamAudioSourceNode | null = null;
@@ -213,6 +217,12 @@ export class AudioManager {
 		return this.rxDspChain;
 	}
 
+	/** Returns the TX DSP chain for processing control.
+	 *  Returns null if TX is not active. */
+	getTxDspChain(): TxDspChain | null {
+		return this.txDspChain;
+	}
+
 	async startTx(): Promise<void> {
 		if (!this.audioCtx || !this.workletNode) return;
 		try {
@@ -221,7 +231,13 @@ export class AudioManager {
 				video: false,
 			});
 			this.micSource = this.audioCtx.createMediaStreamSource(this.micStream);
-			this.micSource.connect(this.workletNode);
+
+			// Build TX DSP chain and insert between mic source and PCM worklet
+			this.txDspChain = new TxDspChain(this.audioCtx);
+			await this.txDspChain.build();
+			this.micSource.connect(this.txDspChain.input);
+			this.txDspChain.output.connect(this.workletNode);
+
 			this.txActive = true;
 		} catch (e) {
 			console.warn('Mic access denied or unavailable:', e);
@@ -230,6 +246,8 @@ export class AudioManager {
 
 	stopTx(): void {
 		this.txActive = false;
+		this.txDspChain?.destroy();
+		this.txDspChain = null;
 		this.micSource?.disconnect();
 		this.micSource = null;
 		this.micStream?.getTracks().forEach((t) => t.stop());
