@@ -1,5 +1,11 @@
 # Riglet
 
+[![Pytest](https://github.com/tholent/riglet/actions/workflows/pytest.yml/badge.svg)](https://github.com/tholent/riglet/actions/workflows/pytest.yml)
+[![Mypy](https://github.com/tholent/riglet/actions/workflows/mypy.yml/badge.svg)](https://github.com/tholent/riglet/actions/workflows/mypy.yml)
+[![Ruff](https://github.com/tholent/riglet/actions/workflows/ruff.yml/badge.svg)](https://github.com/tholent/riglet/actions/workflows/ruff.yml)
+[![JS Lint](https://github.com/tholent/riglet/actions/workflows/js-lint.yml/badge.svg)](https://github.com/tholent/riglet/actions/workflows/js-lint.yml)
+[![JS Test](https://github.com/tholent/riglet/actions/workflows/js-test.yml/badge.svg)](https://github.com/tholent/riglet/actions/workflows/js-test.yml)
+
 A self-hosted web application for browser-based control of amateur radios over a local LAN. Riglet runs on a Raspberry Pi 4 co-located with your radios, providing remote frequency/mode/PTT control, audio streaming, and live waterfall display from any device on the network.
 
 ## Project Structure
