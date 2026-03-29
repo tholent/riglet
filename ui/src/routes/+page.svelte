@@ -382,10 +382,13 @@
 					<div class="control-block">
 						<ModeSelector mode={radio.mode} {controlWs} {radioId} />
 					</div>
-					<div class="control-block freq-knob-row">
-						<AudioControls {radioId} {rxVolume} {txGain} audioManager={audioMgr} />
-						<FrequencyDisplay freq={radio.freq} {controlWs} {presets} />
-						<TuningKnob freq={radio.freq} {controlWs} />
+					<div class="control-block">
+						<div class="freq-knob-row">
+							<AudioControls {radioId} {rxVolume} {txGain} audioManager={audioMgr} />
+							<FrequencyDisplay freq={radio.freq} {controlWs} {presets} />
+							<TuningKnob freq={radio.freq} {controlWs} />
+						</div>
+						<RxDspPillRow {rxDspChain} on:change={(e) => handleRxDspChange(e.detail)} />
 					</div>
 					<div class="control-block">
 						<BandSelector {controlWs} currentFreq={radio.freq} {region} {enabledBands} />
@@ -397,6 +400,7 @@
 					<div class="control-block ptt-row">
 						<PttButton ptt={radio.ptt} {controlWs} />
 						<Knob value={txGain} min={0} max={100} step={5} label="Mic Gain" size={72} onchange={onTxGainChange} />
+						<TxDspPanel {txDspChain} on:change={(e) => handleTxDspChange(e.detail)} />
 					</div>
 					<div class="control-block">
 						<SmeterDisplay smeter={radio.smeter ?? 0} />
@@ -422,10 +426,13 @@
 							{#if panel.component === 'visualization'}
 								<VisualizationPanel bind:mode={vizMode} {radioId} cursorMhz={radio.freq} radioMode={radio.mode} pcmSamples={radio.ptt ? txPcm : latestPcm} fftBins={simFftBins} />
 							{:else if panel.component === 'frequency'}
-								<div class="inner-block freq-knob-row">
-									<AudioControls {radioId} {rxVolume} {txGain} audioManager={audioMgr} />
-									<FrequencyDisplay freq={radio.freq} {controlWs} {presets} />
-									<TuningKnob freq={radio.freq} {controlWs} />
+								<div class="inner-block">
+									<div class="freq-knob-row">
+										<AudioControls {radioId} {rxVolume} {txGain} audioManager={audioMgr} />
+										<FrequencyDisplay freq={radio.freq} {controlWs} {presets} />
+										<TuningKnob freq={radio.freq} {controlWs} />
+									</div>
+									<RxDspPillRow {rxDspChain} on:change={(e) => handleRxDspChange(e.detail)} />
 								</div>
 							{:else if panel.component === 'band-selector'}
 								<div class="inner-block">
@@ -439,6 +446,7 @@
 								<div class="inner-block ptt-row">
 									<PttButton ptt={radio.ptt} {controlWs} />
 									<Knob value={txGain} min={0} max={100} step={5} label="Mic Gain" size={72} onchange={onTxGainChange} />
+									<TxDspPanel {txDspChain} on:change={(e) => handleTxDspChange(e.detail)} />
 								</div>
 							{:else if panel.component === 'smeter'}
 								<div class="inner-block">
