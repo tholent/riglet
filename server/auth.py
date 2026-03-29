@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import contextlib
 import os
+import secrets
 import tempfile
 from pathlib import Path
 from typing import Any
@@ -21,7 +22,8 @@ _DEFAULT_SECRETS_PATH = Path(
 )
 
 SESSION_COOKIE_NAME = "riglet_session"
-SESSION_MAX_AGE = 86400  # 24 hours in seconds
+_SESSION_MAX_AGE_DAYS = int(os.environ.get("SESSION_MAX_AGE_DAYS", "30"))
+SESSION_MAX_AGE = _SESSION_MAX_AGE_DAYS * 86400
 
 # Paths that never require authentication.
 # /api/auth/set-password is always public so the endpoint can return the
@@ -96,17 +98,22 @@ def save_secrets(data: dict[str, str], path: Path = _DEFAULT_SECRETS_PATH) -> No
 # ---------------------------------------------------------------------------
 
 
-def create_session_token(secret_key: str) -> str:
-    """Create a signed session token using *secret_key* as the HMAC key."""
-    signer = TimestampSigner(secret_key)
+def generate_session_secret() -> str:
+    """Return a new 32-byte random hex string suitable for use as a signing key."""
+    return secrets.token_hex(32)
+
+
+def create_session_token(session_secret: str) -> str:
+    """Create a signed session token using *session_secret* as the HMAC key."""
+    signer = TimestampSigner(session_secret)
     return signer.sign("session").decode("utf-8")
 
 
 def verify_session_token(
-    token: str, secret_key: str, max_age: int = SESSION_MAX_AGE
+    token: str, session_secret: str, max_age: int = SESSION_MAX_AGE
 ) -> bool:
     """Return True if *token* is valid and not older than *max_age* seconds."""
-    signer = TimestampSigner(secret_key)
+    signer = TimestampSigner(session_secret)
     try:
         signer.unsign(token, max_age=max_age)
         return True
@@ -145,9 +152,11 @@ class SessionAuthMiddleware(BaseHTTPMiddleware):
         if path in _PUBLIC_PATHS:
             return await call_next(request)  # type: ignore[no-any-return]
 
-        password_hash = secrets.get("password_hash", "")
+        session_secret = secrets.get("session_secret", "")
         token = request.cookies.get(SESSION_COOKIE_NAME, "")
-        is_valid = bool(token) and verify_session_token(token, password_hash)
+        is_valid = (
+            bool(token) and bool(session_secret) and verify_session_token(token, session_secret)
+        )
 
         # WebSocket connections: close with 4401 on auth failure.
         if request.scope.get("type") == "websocket":

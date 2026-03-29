@@ -128,7 +128,9 @@ async def auth_client(
 
     secrets_path = tmp_path / "secrets.yaml"
     password_hash = hash_password("testpass1")
-    save_secrets({"password_hash": password_hash}, secrets_path)
+    from auth import generate_session_secret
+    session_secret = generate_session_secret()
+    save_secrets({"password_hash": password_hash, "session_secret": session_secret}, secrets_path)
     app.state.secrets_path = secrets_path
 
     async with httpx.AsyncClient(

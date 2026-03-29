@@ -126,7 +126,8 @@ async def get_vfo(radio: RadioDep) -> JSONResponse:
         vfo = await radio.get_vfo()
         return JSONResponse(content={"vfo": vfo})
     except Exception as exc:
-        return JSONResponse(status_code=503, content={"error": str(exc)})
+        logger.error("get_vfo failed for %s: %s", radio.config.id, exc)
+        return JSONResponse(status_code=503, content={"error": "Radio unavailable"})
 
 
 @router.post("/radio/{radio_id}/cat/vfo")
@@ -148,7 +149,8 @@ async def get_swr(radio: RadioDep) -> JSONResponse:
         swr = await radio.get_swr()
         return JSONResponse(content={"swr": swr})
     except Exception as exc:
-        return JSONResponse(status_code=503, content={"error": str(exc)})
+        logger.error("get_swr failed for %s: %s", radio.config.id, exc)
+        return JSONResponse(status_code=503, content={"error": "Radio unavailable"})
 
 
 @router.get("/radio/{radio_id}/cat/ctcss")
@@ -157,7 +159,8 @@ async def get_ctcss(radio: RadioDep) -> JSONResponse:
         tone = await radio.get_ctcss()
         return JSONResponse(content={"tone": tone})
     except Exception as exc:
-        return JSONResponse(status_code=503, content={"error": str(exc)})
+        logger.error("get_ctcss failed for %s: %s", radio.config.id, exc)
+        return JSONResponse(status_code=503, content={"error": "Radio unavailable"})
 
 
 @router.post("/radio/{radio_id}/cat/ctcss")

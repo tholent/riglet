@@ -331,9 +331,10 @@ async def create_preset(request: Request) -> JSONResponse:
             content={"type": "conflict", "detail": f"Preset id {preset.id!r} already exists."},
         )
 
-    updated = config.model_copy(update={"presets": [*config.presets, preset]})
-    save_config(updated)
-    request.app.state.config = updated
+    async with request.app.state.config_lock:
+        updated = config.model_copy(update={"presets": [*config.presets, preset]})
+        save_config(updated)
+        request.app.state.config = updated
     return JSONResponse(
         content={"presets": [p.model_dump(mode="json") for p in updated.presets]}
     )
@@ -372,9 +373,10 @@ async def update_preset(preset_id: str, request: Request) -> JSONResponse:
 
     new_presets = list(config.presets)
     new_presets[idx] = updated_preset
-    updated_config = config.model_copy(update={"presets": new_presets})
-    save_config(updated_config)
-    request.app.state.config = updated_config
+    async with request.app.state.config_lock:
+        updated_config = config.model_copy(update={"presets": new_presets})
+        save_config(updated_config)
+        request.app.state.config = updated_config
     return JSONResponse(
         content={"presets": [p.model_dump(mode="json") for p in updated_config.presets]}
     )
@@ -392,9 +394,10 @@ async def delete_preset(preset_id: str, request: Request) -> JSONResponse:
     if len(new_presets) == len(config.presets):
         raise HTTPException(status_code=404, detail=f"Preset {preset_id!r} not found")
 
-    updated_config = config.model_copy(update={"presets": new_presets})
-    save_config(updated_config)
-    request.app.state.config = updated_config
+    async with request.app.state.config_lock:
+        updated_config = config.model_copy(update={"presets": new_presets})
+        save_config(updated_config)
+        request.app.state.config = updated_config
     return JSONResponse(
         content={"presets": [p.model_dump(mode="json") for p in updated_config.presets]}
     )
@@ -430,9 +433,10 @@ async def import_presets(request: Request) -> JSONResponse:
             )
         parsed.append(p)
 
-    updated_config = config.model_copy(update={"presets": parsed})
-    save_config(updated_config)
-    request.app.state.config = updated_config
+    async with request.app.state.config_lock:
+        updated_config = config.model_copy(update={"presets": parsed})
+        save_config(updated_config)
+        request.app.state.config = updated_config
     return JSONResponse(
         content={"presets": [p.model_dump(mode="json") for p in updated_config.presets]}
     )

@@ -100,7 +100,7 @@ async def test_audio(radio: RadioDep) -> JSONResponse:
         logger.warning("audio test failed: %s", exc)
         return JSONResponse(
             status_code=503,
-            content={"error": str(exc)},
+            content={"error": "Audio device unavailable"},
         )
 
 
