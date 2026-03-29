@@ -9,17 +9,16 @@ const VOICE_OPERATING: LayoutConfig = {
 	name: 'Voice Operating',
 	columns: 2,
 	columnWidths: '2fr 1fr',
-	rows: 6,
+	rows: 5,
 	panels: [
 		{ id: 'mode', component: 'mode-selector', position: { row: 1, col: 1, rowSpan: 1, colSpan: 1 } },
 		{ id: 'freq', component: 'frequency', position: { row: 2, col: 1, rowSpan: 1, colSpan: 1 } },
 		{ id: 'band', component: 'band-selector', position: { row: 3, col: 1, rowSpan: 1, colSpan: 1 } },
-		{ id: 'presets', component: 'presets', position: { row: 4, col: 1, rowSpan: 1, colSpan: 1 } },
-		{ id: 'viz', component: 'visualization', position: { row: 5, col: 1, rowSpan: 2, colSpan: 1 } },
+		{ id: 'viz', component: 'visualization', position: { row: 4, col: 1, rowSpan: 4, colSpan: 1 } },
 		{ id: 'ptt', component: 'ptt', position: { row: 1, col: 2, rowSpan: 1, colSpan: 1 } },
 		{ id: 'smeter', component: 'smeter', position: { row: 2, col: 2, rowSpan: 1, colSpan: 1 } },
-		{ id: 'audio', component: 'audio', position: { row: 3, col: 2, rowSpan: 1, colSpan: 1 } },
-		{ id: 'dsp', component: 'dsp', position: { row: 4, col: 2, rowSpan: 3, colSpan: 1 } },
+		{ id: 'presets', component: 'presets', position: { row: 3, col: 2, rowSpan: 1, colSpan: 1 } },
+		{ id: 'dsp', component: 'dsp', position: { row: 4, col: 2, rowSpan: 1, colSpan: 1 } },
 	],
 };
 

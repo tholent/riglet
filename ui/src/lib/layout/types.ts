@@ -10,7 +10,8 @@ export type PanelComponent =
 	| 'lufs-meter'
 	| 'presets'
 	| 'vfo'
-	| 'cat-extended';
+	| 'cat-extended'
+	| 'tuning-knob';
 
 export interface PanelPosition {
 	row: number;

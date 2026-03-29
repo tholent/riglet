@@ -1,12 +1,12 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
-	import { getStatus, getConfig, getRadioCat, getPresets } from '$lib/api.js';
+	import { getStatus, getConfig, getRadioCat, getPresets, postAudioVolume } from '$lib/api.js';
 	import { radioState, appConfig } from '$lib/stores.js';
 	import { ControlWebSocket, AudioWebSocket } from '$lib/websocket.js';
 	import { AudioManager } from '$lib/audio/audio-manager.js';
 	import { activeLayout } from '$lib/layout/store.js';
-	import type { LayoutConfig } from '$lib/layout/types.js';
+	import type { LayoutConfig, LayoutPanel } from '$lib/layout/types.js';
 	import VisualizationPanel from '$lib/components/VisualizationPanel.svelte';
 	import FrequencyDisplay from '$lib/components/FrequencyDisplay.svelte';
 	import BandSelector from '$lib/components/BandSelector.svelte';
@@ -19,8 +19,9 @@
 	import PresetSelector from '$lib/components/PresetSelector.svelte';
 	import VfoSelector from '$lib/components/VfoSelector.svelte';
 	import CatExtended from '$lib/components/CatExtended.svelte';
+	import TuningKnob from '$lib/components/TuningKnob.svelte';
+	import Knob from '$lib/components/Knob.svelte';
 	import LayoutManager from '$lib/components/LayoutManager.svelte';
-	import VizSwitcher from '$lib/components/VizSwitcher.svelte';
 	import type { VisualizationMode } from '$lib/viz/types.js';
 	import type { RadioState, PresetConfig } from '$lib/types.js';
 
@@ -41,9 +42,21 @@
 	let rxVolume = $state(50);
 	let txGain = $state(50);
 
+	let txGainTimer: ReturnType<typeof setTimeout> | null = null;
+	function onTxGainChange(v: number) {
+		txGain = v;
+		if (txGainTimer) clearTimeout(txGainTimer);
+		txGainTimer = setTimeout(() => {
+			postAudioVolume(radioId ?? '', rxVolume, txGain, 0).catch((e) => {
+				console.error('Failed to save tx gain:', e);
+			});
+		}, 300);
+	}
+
 	let controlWs = $state<ControlWebSocket | null>(null);
 	let audioWs: AudioWebSocket | null = null;
 	let audioMgr = $state<AudioManager | null>(null);
+	let dspChain = $state<import('$lib/audio/dsp-chain.js').DspChain | null>(null);
 
 	// Presets
 	let presets = $state<PresetConfig[]>([]);
@@ -52,8 +65,20 @@
 	let region = $state('us');
 	let enabledBands = $state<string[]>([]);
 
-	// Visualization mode
-	let vizMode = $state<VisualizationMode>('waterfall');
+	// Visualization mode — persisted in localStorage
+	const VIZ_MODES: VisualizationMode[] = ['waterfall', 'spectrum', 'oscilloscope', 'constellation', 'phase', 'spectrogram3d'];
+	const VIZ_STORAGE_KEY = 'riglet:vizMode';
+	function loadVizMode(): VisualizationMode {
+		try {
+			const stored = localStorage.getItem(VIZ_STORAGE_KEY) as VisualizationMode;
+			if (stored && VIZ_MODES.includes(stored)) return stored;
+		} catch { /* ignore */ }
+		return 'waterfall';
+	}
+	let vizMode = $state<VisualizationMode>(loadVizMode());
+	$effect(() => {
+		try { localStorage.setItem(VIZ_STORAGE_KEY, vizMode); } catch { /* ignore */ }
+	});
 
 	// Latest PCM samples for LUFS metering (fed from audio manager)
 	let latestPcm = $state<Float32Array | null>(null);
@@ -142,6 +167,7 @@
 		// Audio setup
 		audioMgr = new AudioManager();
 		await audioMgr.startRx();
+		dspChain = audioMgr.getDspChain();
 
 		if (state.simulation) {
 			// Simulated radio: mic is the audio source (RX path)
@@ -192,6 +218,12 @@
 
 	// Narrow screen breakpoint
 	let isNarrow = $state(false);
+
+	function getColPanels(col: number): LayoutPanel[] {
+		return [...layout.panels]
+			.filter((p) => p.position.col === col)
+			.sort((a, b) => a.position.row - b.position.row);
+	}
 	onMount(() => {
 		const mq = window.matchMedia('(max-width: 767px)');
 		isNarrow = mq.matches;
@@ -224,7 +256,6 @@
 		>
 			{state.online ? (state.simulation ? 'SIM' : 'ONLINE') : 'OFFLINE'}
 		</span>
-		<VizSwitcher bind:mode={vizMode} />
 		<LayoutManager />
 		<a href="/setup" class="setup-btn" title="Open setup wizard" aria-label="Setup / configuration">⚙</a>
 	</header>
@@ -237,52 +268,50 @@
 					<div class="control-block">
 						<ModeSelector mode={state.mode} {controlWs} {radioId} />
 					</div>
-					<div class="control-block">
+					<div class="control-block freq-knob-row">
+						<AudioControls {radioId} {rxVolume} {txGain} audioManager={audioMgr} />
 						<FrequencyDisplay freq={state.freq} {controlWs} {presets} />
+						<TuningKnob freq={state.freq} {controlWs} />
 					</div>
 					<div class="control-block">
 						<BandSelector {controlWs} currentFreq={state.freq} {region} {enabledBands} />
 					</div>
 					<div class="control-block">
-						<PresetSelector {radioId} currentFreqMhz={state.freq} {controlWs} />
+						<PresetSelector {radioId} currentFreqMhz={state.freq} {controlWs} onPresetsChange={(p) => { presets = p; }} />
 					</div>
-					<VisualizationPanel mode={vizMode} {radioId} cursorMhz={state.freq} radioMode={state.mode} pcmSamples={state.ptt ? txPcm : latestPcm} fftBins={simFftBins} />
-					<div class="control-block">
+					<VisualizationPanel bind:mode={vizMode} {radioId} cursorMhz={state.freq} radioMode={state.mode} pcmSamples={state.ptt ? txPcm : latestPcm} fftBins={simFftBins} />
+					<div class="control-block ptt-row">
 						<PttButton ptt={state.ptt} {controlWs} />
+						<Knob value={txGain} min={0} max={100} step={5} label="Mic Gain" size={72} onchange={onTxGainChange} />
 					</div>
 					<div class="control-block">
 						<SmeterDisplay smeter={state.smeter ?? 0} />
 					</div>
 					<div class="control-block">
-						<AudioControls {radioId} {rxVolume} {txGain} audioManager={audioMgr} />
-					</div>
-					<div class="control-block">
-						<DspPanel dspChain={audioMgr?.getDspChain() ?? null} />
+						<DspPanel dspChain={dspChain} />
 					</div>
 				</div>
 			{:else}
-				<!-- Dynamic CSS Grid driven by active LayoutConfig -->
+				<!-- Dynamic layout: outer grid sets column widths; each column scrolls independently -->
 				<div
 					class="layout-grid"
-					style="
-						grid-template-columns: {layout.columnWidths ?? `repeat(${layout.columns}, 1fr)`};
-						grid-template-rows: repeat({layout.rows}, auto);
-					"
+					style="grid-template-columns: {layout.columnWidths ?? `repeat(${layout.columns}, 1fr)`};"
 					aria-label="Radio control layout"
 				>
-					{#each layout.panels as panel (panel.id)}
+					{#each Array.from({ length: layout.columns }, (_, i) => i + 1) as col}
+					<div class="layout-col">
+					{#each getColPanels(col) as panel (panel.id)}
 						<div
 							class="layout-panel"
-							style="
-								grid-column: {panel.position.col} / span {panel.position.colSpan};
-								grid-row: {panel.position.row} / span {panel.position.rowSpan};
-							"
+							class:viz-panel={panel.component === 'visualization'}
 						>
 							{#if panel.component === 'visualization'}
-								<VisualizationPanel mode={vizMode} {radioId} cursorMhz={state.freq} radioMode={state.mode} pcmSamples={state.ptt ? txPcm : latestPcm} fftBins={simFftBins} />
+								<VisualizationPanel bind:mode={vizMode} {radioId} cursorMhz={state.freq} radioMode={state.mode} pcmSamples={state.ptt ? txPcm : latestPcm} fftBins={simFftBins} />
 							{:else if panel.component === 'frequency'}
-								<div class="inner-block">
+								<div class="inner-block freq-knob-row">
+									<AudioControls {radioId} {rxVolume} {txGain} audioManager={audioMgr} />
 									<FrequencyDisplay freq={state.freq} {controlWs} {presets} />
+									<TuningKnob freq={state.freq} {controlWs} />
 								</div>
 							{:else if panel.component === 'band-selector'}
 								<div class="inner-block">
@@ -293,8 +322,9 @@
 									<ModeSelector mode={state.mode} {controlWs} {radioId} />
 								</div>
 							{:else if panel.component === 'ptt'}
-								<div class="inner-block">
+								<div class="inner-block ptt-row">
 									<PttButton ptt={state.ptt} {controlWs} />
+									<Knob value={txGain} min={0} max={100} step={5} label="Mic Gain" size={72} onchange={onTxGainChange} />
 								</div>
 							{:else if panel.component === 'smeter'}
 								<div class="inner-block">
@@ -306,7 +336,7 @@
 								</div>
 							{:else if panel.component === 'dsp'}
 								<div class="inner-block">
-									<DspPanel dspChain={audioMgr?.getDspChain() ?? null} />
+									<DspPanel dspChain={dspChain} />
 								</div>
 							{:else if panel.component === 'lufs-meter'}
 								<div class="inner-block">
@@ -314,7 +344,7 @@
 								</div>
 							{:else if panel.component === 'presets'}
 								<div class="inner-block">
-									<PresetSelector {radioId} currentFreqMhz={state.freq} {controlWs} />
+									<PresetSelector {radioId} currentFreqMhz={state.freq} {controlWs} onPresetsChange={(p) => { presets = p; }} />
 								</div>
 							{:else if panel.component === 'vfo'}
 								<div class="inner-block">
@@ -330,10 +360,12 @@
 										{controlWs}
 									/>
 								</div>
-							{/if}
+								{/if}
 						</div>
 					{/each}
-				</div>
+					</div><!-- /.layout-col -->
+				{/each}<!-- /columns loop -->
+				</div><!-- /.layout-grid -->
 			{/if}
 		{:else}
 			<div class="no-radio">
@@ -341,6 +373,10 @@
 			</div>
 		{/if}
 	</main>
+
+	<footer class="footer">
+		Thoughtfully made by <a href="https://tholent.com" target="_blank" rel="noopener noreferrer">tholent</a>
+	</footer>
 </div>
 
 <style>
@@ -421,20 +457,38 @@
 		outline: none;
 	}
 
-	/* Dynamic layout grid */
+	/* Dynamic layout grid — columns only; rows handled per-column */
 	.layout-grid {
 		display: grid;
 		gap: 0;
 		flex: 1;
 		min-height: 0;
 		overflow: hidden;
+		align-items: stretch;
+	}
+
+	/* Each column scrolls independently */
+	.layout-col {
+		display: flex;
+		flex-direction: column;
+		min-height: 0;
+		overflow-y: auto;
+		overflow-x: hidden;
+		scrollbar-width: thin;
+		scrollbar-color: #2a2a2a transparent;
 	}
 
 	.layout-panel {
 		min-height: 0;
-		overflow: hidden;
+		flex-shrink: 0;
 		display: flex;
 		flex-direction: column;
+	}
+
+	/* Visualization panel fills remaining column height */
+	.layout-panel.viz-panel {
+		flex: 1;
+		min-height: 200px;
 	}
 
 	/* Panels that are not the visualization get block padding */
@@ -445,6 +499,18 @@
 		padding: 10px 12px;
 		height: 100%;
 		box-sizing: border-box;
+	}
+
+	.ptt-row {
+		display: flex;
+		align-items: center;
+		gap: 16px;
+	}
+
+	.freq-knob-row {
+		display: flex;
+		align-items: center;
+		gap: 12px;
 	}
 
 	/* Narrow single-column fallback */
@@ -471,6 +537,25 @@
 	}
 
 	.no-radio a { color: #4a9eff; }
+
+	.footer {
+		flex-shrink: 0;
+		padding: 6px 20px;
+		background: #1a1a1a;
+		border-top: 1px solid #2a2a2a;
+		font-size: 0.7rem;
+		color: #555;
+		text-align: center;
+	}
+
+	.footer a {
+		color: #4a9eff;
+		text-decoration: none;
+	}
+
+	.footer a:hover {
+		text-decoration: underline;
+	}
 
 	.setup-btn {
 		display: flex;
