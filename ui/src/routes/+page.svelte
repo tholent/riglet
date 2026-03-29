@@ -1,8 +1,9 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
 	import { goto } from '$app/navigation';
-	import { getStatus, getConfig, getRadioCat, getPresets, postAudioVolume, getDspConfig, patchDspConfig } from '$lib/api.js';
+	import { getStatus, getConfig, getRadioCat, getPresets, postAudioVolume, getDspConfig } from '$lib/api.js';
 	import type { RxDspConfig, TxDspConfig } from '$lib/api.js';
+	import { DspPersistence } from '$lib/dsp-persistence.js';
 	import { radioState, appConfig } from '$lib/stores.js';
 	import { ControlWebSocket, AudioWebSocket } from '$lib/websocket.js';
 	import { AudioManager } from '$lib/audio/audio-manager.js';
@@ -60,20 +61,16 @@
 	}
 
 	function handleRxDspChange(detail: Record<string, unknown>): void {
-		if (!radioId) return;
+		if (!dspPersistence) return;
 		// Build a partial RxDspConfig patch from the changed fields
 		const patch: Partial<RxDspConfig> = detail as Partial<RxDspConfig>;
-		patchDspConfig(radioId, { rx: patch }).catch((e) => {
-			console.warn('[DSP] Failed to persist RX DSP change:', e);
-		});
+		dspPersistence.saveRx(patch);
 	}
 
 	function handleTxDspChange(detail: { param: string; value: unknown }): void {
-		if (!radioId) return;
+		if (!dspPersistence) return;
 		const patch: Partial<TxDspConfig> = { [detail.param]: detail.value } as Partial<TxDspConfig>;
-		patchDspConfig(radioId, { tx: patch }).catch((e) => {
-			console.warn('[DSP] Failed to persist TX DSP change:', e);
-		});
+		dspPersistence.saveTx(patch);
 	}
 
 	let controlWs: ControlWebSocket | null = $state(null);
@@ -82,6 +79,7 @@
 	let dspChain: DspChain | null = $state(null);
 	let rxDspChain: RxDspChain | null = $state(null);
 	let txDspChain: TxDspChain | null = $state(null);
+	let dspPersistence: DspPersistence | null = null;
 
 	// Presets
 	let presets: PresetConfig[] = $state([]);
@@ -230,9 +228,13 @@
 				console.warn('[DSP] Failed to load DSP config from backend, using defaults:', e);
 			}
 
+			dspPersistence = new DspPersistence(radioId);
+
 			mountCleanup = () => {
 				cws.disconnect();
 				audioMgr?.stopRx(); // also calls stopMicAsRx internally
+				dspPersistence?.destroy();
+				dspPersistence = null;
 			};
 			return;
 		}
@@ -316,11 +318,15 @@
 			console.warn('[DSP] Failed to load DSP config from backend, using defaults:', e);
 		}
 
+		dspPersistence = new DspPersistence(radioId);
+
 		mountCleanup = () => {
 			cws.disconnect();
 			aws.disconnect();
 			audioMgr?.stopTx();
 			audioMgr?.stopRx();
+			dspPersistence?.destroy();
+			dspPersistence = null;
 		};
 	});
 

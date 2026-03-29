@@ -31,7 +31,7 @@
 | 21 | Integrate RxDspPillRow into main page layout                     | P0       | @developer | [x]    | 17, 18     | `routes/+page.svelte`                           |
 | 22 | Integrate TxDspPanel into PTT area                               | P0       | @developer | [x]    | 19, 20     | `routes/+page.svelte`                           |
 | 23 | Load DSP config from backend on radio connect                    | P0       | @developer | [x]    | 02, 10, 16 | Fetch GET on WS open, apply to chains           |
-| 24 | Debounced save DSP config to backend on parameter change         | P0       | @developer | [ ]    | 02, 23     | 500ms debounce, PATCH on change                 |
+| 24 | Debounced save DSP config to backend on parameter change         | P0       | @developer | [x]    | 02, 23     | 500ms debounce, PATCH on change                 |
 | 25 | Backend: unit tests for RxDspConfig and TxDspConfig validation   | P0       | @developer | [x]    | 01         | `tests/test_dsp_config.py`                      |
 | 26 | Backend: integration tests for DSP config GET/PATCH              | P0       | @developer | [x]    | 02         | `tests/test_dsp_api.py`                         |
 | 27 | Frontend: unit tests for RxDspChain node wiring                  | P0       | @developer | [x]    | 10         | Vitest, mock AudioContext                       |
