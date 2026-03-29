@@ -39,7 +39,7 @@
 	let gateThreshold = $state(-60);
 
 	// ── Click-outside + Escape ────────────────────────────────────────
-	let menuEl: HTMLDivElement | undefined;
+	let menuEl = $state<HTMLDivElement | undefined>(undefined);
 
 	function onClickOutside(e: MouseEvent): void {
 		if (open && menuEl && !menuEl.contains(e.target as Node)) {
@@ -182,6 +182,7 @@
 		class="tx-dsp-panel"
 		role="dialog"
 		aria-label="TX DSP controls"
+		tabindex="-1"
 		bind:this={menuEl}
 		onkeydown={closeOnEscape}
 	>
@@ -593,7 +594,6 @@
 	}
 
 	@media (prefers-reduced-motion: reduce) {
-		.tx-dsp-trigger,
 		.preset-pill {
 			transition: none;
 		}

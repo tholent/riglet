@@ -55,7 +55,7 @@
 
 	// ── Positioning ───────────────────────────────────────────────────
 
-	let popoverEl: HTMLDivElement | undefined;
+	let popoverEl = $state<HTMLDivElement | undefined>(undefined);
 
 	let posStyle = $derived.by(() => {
 		if (!anchor || !open) return '';
@@ -253,6 +253,7 @@
 		class="popover"
 		role="dialog"
 		aria-label="{filter} filter settings"
+		tabindex="-1"
 		style={posStyle}
 		bind:this={popoverEl}
 		onkeydown={onKeydown}

@@ -14,13 +14,13 @@
 	let openFilter = $state<string | null>(null);
 
 	// Pill button element refs for popover anchoring
-	let hpEl: HTMLButtonElement | undefined;
-	let lpEl: HTMLButtonElement | undefined;
-	let peakEl: HTMLButtonElement | undefined;
-	let nbEl: HTMLButtonElement | undefined;
-	let notchEl: HTMLButtonElement | undefined;
-	let bpEl: HTMLButtonElement | undefined;
-	let nrEl: HTMLButtonElement | undefined;
+	let hpEl = $state<HTMLButtonElement | undefined>(undefined);
+	let lpEl = $state<HTMLButtonElement | undefined>(undefined);
+	let peakEl = $state<HTMLButtonElement | undefined>(undefined);
+	let nbEl = $state<HTMLButtonElement | undefined>(undefined);
+	let notchEl = $state<HTMLButtonElement | undefined>(undefined);
+	let bpEl = $state<HTMLButtonElement | undefined>(undefined);
+	let nrEl = $state<HTMLButtonElement | undefined>(undefined);
 
 	// Active state for each filter — reflects enabled state from the popover
 	let hpEnabled = $state(false);

@@ -1,6 +1,50 @@
 import type { AudioDevice, PresetConfig, RadioState, RigletConfig, SerialDevice, StatusResponse } from './types.js';
 import type { BandDef } from './bandplan.js';
 
+export interface RxDspConfig {
+	highpass_enabled: boolean;
+	highpass_freq: number;
+	lowpass_enabled: boolean;
+	lowpass_freq: number;
+	peak_enabled: boolean;
+	peak_freq: number;
+	peak_gain: number;
+	peak_q: number;
+	noise_blanker_enabled: boolean;
+	noise_blanker_freq: number;
+	notch_enabled: boolean;
+	notch_mode: 'manual' | 'auto';
+	notch_freq: number;
+	notch_q: number;
+	bandpass_enabled: boolean;
+	bandpass_preset: 'voice' | 'cw' | 'manual';
+	bandpass_center: number;
+	bandpass_width: number;
+	nr_enabled: boolean;
+	nr_amount: number;
+}
+
+export interface TxDspConfig {
+	highpass_enabled: boolean;
+	highpass_freq: number;
+	lowpass_enabled: boolean;
+	lowpass_freq: number;
+	eq_enabled: boolean;
+	eq_bass_gain: number;
+	eq_mid_gain: number;
+	eq_treble_gain: number;
+	compressor_enabled: boolean;
+	compressor_preset: 'off' | 'light' | 'medium' | 'heavy' | 'manual';
+	compressor_threshold: number;
+	compressor_ratio: number;
+	compressor_attack: number;
+	compressor_release: number;
+	limiter_enabled: boolean;
+	limiter_threshold: number;
+	gate_enabled: boolean;
+	gate_threshold: number;
+}
+
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
 	const res = await fetch(path, options);
 	if (!res.ok) {
@@ -121,4 +165,18 @@ export function exportPresets(): Promise<{ presets: PresetConfig[] }> {
 
 export function getRadioModes(radioId: string): Promise<{ modes: string[] }> {
 	return request<{ modes: string[] }>(`/api/radio/${radioId}/modes`);
+}
+
+export function getDspConfig(radioId: string): Promise<{ rx: RxDspConfig; tx: TxDspConfig }> {
+	return request<{ rx: RxDspConfig; tx: TxDspConfig }>(`/api/radios/${radioId}/dsp`);
+}
+
+export function patchDspConfig(
+	radioId: string,
+	patch: { rx?: Partial<RxDspConfig>; tx?: Partial<TxDspConfig> },
+): Promise<{ rx: RxDspConfig; tx: TxDspConfig }> {
+	return request<{ rx: RxDspConfig; tx: TxDspConfig }>(
+		`/api/radios/${radioId}/dsp`,
+		json('PATCH', patch),
+	);
 }

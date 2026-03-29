@@ -1,7 +1,8 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
 	import { goto } from '$app/navigation';
-	import { getStatus, getConfig, getRadioCat, getPresets, postAudioVolume } from '$lib/api.js';
+	import { getStatus, getConfig, getRadioCat, getPresets, postAudioVolume, getDspConfig, patchDspConfig } from '$lib/api.js';
+	import type { RxDspConfig, TxDspConfig } from '$lib/api.js';
 	import { radioState, appConfig } from '$lib/stores.js';
 	import { ControlWebSocket, AudioWebSocket } from '$lib/websocket.js';
 	import { AudioManager } from '$lib/audio/audio-manager.js';
@@ -16,6 +17,8 @@
 	import AudioControls from '$lib/components/AudioControls.svelte';
 	import LufsMeter from '$lib/components/LufsMeter.svelte';
 	import DspPanel from '$lib/components/DspPanel.svelte';
+	import RxDspPillRow from '$lib/components/RxDspPillRow.svelte';
+	import TxDspPanel from '$lib/components/TxDspPanel.svelte';
 	import PresetSelector from '$lib/components/PresetSelector.svelte';
 	import VfoSelector from '$lib/components/VfoSelector.svelte';
 	import CatExtended from '$lib/components/CatExtended.svelte';
@@ -25,6 +28,8 @@
 	import type { VisualizationMode } from '$lib/viz/types.js';
 	import type { RadioState, PresetConfig } from '$lib/types.js';
 	import type { DspChain } from '$lib/audio/dsp-chain.js';
+	import type { RxDspChain } from '$lib/audio/rx-dsp-chain.js';
+	import type { TxDspChain } from '$lib/audio/tx-dsp-chain.js';
 
 	let radioId: string | null = $state(null);
 	let radio: RadioState = $state({
@@ -54,10 +59,29 @@
 		}, 300);
 	}
 
+	function handleRxDspChange(detail: Record<string, unknown>): void {
+		if (!radioId) return;
+		// Build a partial RxDspConfig patch from the changed fields
+		const patch: Partial<RxDspConfig> = detail as Partial<RxDspConfig>;
+		patchDspConfig(radioId, { rx: patch }).catch((e) => {
+			console.warn('[DSP] Failed to persist RX DSP change:', e);
+		});
+	}
+
+	function handleTxDspChange(detail: { param: string; value: unknown }): void {
+		if (!radioId) return;
+		const patch: Partial<TxDspConfig> = { [detail.param]: detail.value } as Partial<TxDspConfig>;
+		patchDspConfig(radioId, { tx: patch }).catch((e) => {
+			console.warn('[DSP] Failed to persist TX DSP change:', e);
+		});
+	}
+
 	let controlWs: ControlWebSocket | null = $state(null);
 	let audioWs: AudioWebSocket | null = null;
 	let audioMgr: AudioManager | null = $state(null);
 	let dspChain: DspChain | null = $state(null);
+	let rxDspChain: RxDspChain | null = $state(null);
+	let txDspChain: TxDspChain | null = $state(null);
 
 	// Presets
 	let presets: PresetConfig[] = $state([]);
@@ -172,12 +196,39 @@
 		audioMgr = new AudioManager();
 		await audioMgr.startRx();
 		dspChain = audioMgr.getDspChain();
+		rxDspChain = audioMgr.getRxDspChain();
 
 		if (radio.simulation) {
 			// Simulated radio: mic is the audio source (RX path)
 			audioMgr.onRxPcmFloat = (f32: Float32Array) => { latestPcm = f32; };
 			audioMgr.onSimFftBins = (bins: Float32Array) => { simFftBins = bins; };
 			await audioMgr.startMicAsRx();
+
+			// Load DSP config for RX chain in simulation mode
+			try {
+				const dspCfg = await getDspConfig(radioId);
+				const rx = rxDspChain;
+				if (rx) {
+					rx.enableHighpass(dspCfg.rx.highpass_enabled);
+					rx.setHighpass(dspCfg.rx.highpass_freq);
+					rx.enableLowpass(dspCfg.rx.lowpass_enabled);
+					rx.setLowpass(dspCfg.rx.lowpass_freq);
+					rx.enablePeak(dspCfg.rx.peak_enabled);
+					rx.setPeak(dspCfg.rx.peak_freq, dspCfg.rx.peak_gain, dspCfg.rx.peak_q);
+					rx.enableNoiseBlanker(dspCfg.rx.noise_blanker_enabled);
+					rx.setNoiseBlankerFreq(dspCfg.rx.noise_blanker_freq as 50 | 60);
+					rx.enableNotch(dspCfg.rx.notch_enabled);
+					rx.setNotchMode(dspCfg.rx.notch_mode);
+					rx.setNotch(dspCfg.rx.notch_freq, dspCfg.rx.notch_q);
+					rx.enableBandpass(dspCfg.rx.bandpass_enabled);
+					rx.setBandpassPreset(dspCfg.rx.bandpass_preset);
+					rx.setBandpass(dspCfg.rx.bandpass_center, dspCfg.rx.bandpass_width);
+					rx.enableNr(dspCfg.rx.nr_enabled);
+					rx.setNrAmount(dspCfg.rx.nr_amount);
+				}
+			} catch (e) {
+				console.warn('[DSP] Failed to load DSP config from backend, using defaults:', e);
+			}
 
 			mountCleanup = () => {
 				cws.disconnect();
@@ -212,6 +263,58 @@
 
 		// Start TX capture (mic) alongside RX — PTT gating happens in worklet
 		await audioMgr.startTx();
+		txDspChain = audioMgr.getTxDspChain();
+
+		// Load DSP config from backend and apply to both chains
+		try {
+			const dspCfg = await getDspConfig(radioId);
+			const rx = rxDspChain;
+			if (rx) {
+				rx.enableHighpass(dspCfg.rx.highpass_enabled);
+				rx.setHighpass(dspCfg.rx.highpass_freq);
+				rx.enableLowpass(dspCfg.rx.lowpass_enabled);
+				rx.setLowpass(dspCfg.rx.lowpass_freq);
+				rx.enablePeak(dspCfg.rx.peak_enabled);
+				rx.setPeak(dspCfg.rx.peak_freq, dspCfg.rx.peak_gain, dspCfg.rx.peak_q);
+				rx.enableNoiseBlanker(dspCfg.rx.noise_blanker_enabled);
+				rx.setNoiseBlankerFreq(dspCfg.rx.noise_blanker_freq as 50 | 60);
+				rx.enableNotch(dspCfg.rx.notch_enabled);
+				rx.setNotchMode(dspCfg.rx.notch_mode);
+				rx.setNotch(dspCfg.rx.notch_freq, dspCfg.rx.notch_q);
+				rx.enableBandpass(dspCfg.rx.bandpass_enabled);
+				rx.setBandpassPreset(dspCfg.rx.bandpass_preset);
+				rx.setBandpass(dspCfg.rx.bandpass_center, dspCfg.rx.bandpass_width);
+				rx.enableNr(dspCfg.rx.nr_enabled);
+				rx.setNrAmount(dspCfg.rx.nr_amount);
+			}
+			const tx = txDspChain;
+			if (tx) {
+				tx.enableHighpass(dspCfg.tx.highpass_enabled);
+				tx.setHighpass(dspCfg.tx.highpass_freq);
+				tx.enableLowpass(dspCfg.tx.lowpass_enabled);
+				tx.setLowpass(dspCfg.tx.lowpass_freq);
+				tx.enableEq(dspCfg.tx.eq_enabled);
+				tx.setBass(dspCfg.tx.eq_bass_gain);
+				tx.setMid(dspCfg.tx.eq_mid_gain);
+				tx.setTreble(dspCfg.tx.eq_treble_gain);
+				tx.enableCompressor(dspCfg.tx.compressor_enabled);
+				if (dspCfg.tx.compressor_preset !== 'off') {
+					tx.setCompressorPreset(dspCfg.tx.compressor_preset);
+				}
+				tx.setCompressor(
+					dspCfg.tx.compressor_threshold,
+					dspCfg.tx.compressor_ratio,
+					dspCfg.tx.compressor_attack,
+					dspCfg.tx.compressor_release,
+				);
+				tx.enableLimiter(dspCfg.tx.limiter_enabled);
+				tx.setLimiterThreshold(dspCfg.tx.limiter_threshold);
+				tx.enableGate(dspCfg.tx.gate_enabled);
+				tx.setGateThreshold(dspCfg.tx.gate_threshold);
+			}
+		} catch (e) {
+			console.warn('[DSP] Failed to load DSP config from backend, using defaults:', e);
+		}
 
 		mountCleanup = () => {
 			cws.disconnect();
