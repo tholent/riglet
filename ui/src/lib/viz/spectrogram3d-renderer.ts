@@ -19,8 +19,10 @@ const MAX_FRAMES = 60;
 /** Horizon as a fraction of canvas height from the top (lower = more top-down). */
 const HORIZON_FRAC = 0.20;
 
-/** How far toward the horizon the oldest frame sits (0=front, 1=exactly at horizon). */
-const DEPTH_FRAC = 0.88;
+/** How far toward the horizon the oldest frame sits (0=front, 1=exactly at horizon).
+ *  0.625 = oldest frame lands at ~halfway up the canvas; width there is 37.5% of full,
+ *  giving a gradual narrowing rather than a sharp vanishing-point collapse. */
+const DEPTH_FRAC = 0.625;
 
 /** Convert a raw bin value (dBFS or normalised [0,1]) to [0,1] using the dB window. */
 function normalizeBin(v: number, floorDb: number, ceilDb: number): number {
