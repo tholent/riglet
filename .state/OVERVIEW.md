@@ -173,19 +173,32 @@ TX: Browser mic --> DSP chain --> AudioWorklet --> Audio WebSocket (binary PCM) 
 
 Format: raw PCM, s16le, mono, 16 kHz, 20ms chunks (640 bytes each). TX audio sent while PTT is inactive is silently dropped.
 
-#### Client-Side DSP Chain
+#### Client-Side DSP Chains (v0.3.0)
 
-Audio passes through a configurable processing chain in the browser (Web Audio API):
+Two independent DSP chains per radio, both running in the browser via Web Audio API:
 
-- **Volume control**: Client-side output level (independent of radio volume)
-- **Squelch**: Client-side audio gate based on signal level
-- **Bandpass filter**: Adjustable passband
-- **Notch filter**: Remove specific interference frequencies
-- **Noise reduction**: Spectral subtraction or similar
-- **Compression**: Dynamics processing for TX audio
-- **3-band EQ**: Bass/mid/treble adjustment for both RX and TX paths
+**RX Chain** (between PCM worklet output and speakers):
+- High-pass filter (100-300 Hz configurable)
+- Low-pass filter (2500-3500 Hz configurable)
+- Bandpass filter (presets: Voice/CW/SSB/AM/Custom)
+- Notch filter (manual center/width)
+- Audio peak filter (narrow peaking EQ, high Q)
+- Noise blanker (impulse noise removal, AudioWorklet)
+- Noise reduction (Wiener filter, AudioWorklet)
+- Dynamics compressor
+- 3-band EQ (bass/mid/treble shelving)
+- Squelch gate
+- Volume control
 
-The DSP chain applies to audio before output and can be toggled to be applied before visualization, so visualizations can reflect the processed signal when DSP is active.
+**TX Chain** (between microphone source and PCM worklet input):
+- High-pass filter (100-300 Hz, default 200 Hz)
+- Low-pass filter (2500-3500 Hz, default 2800 Hz)
+- 3-band EQ (bass/mid/treble, mid-boost default)
+- Vocal compressor (presets: Mild/Moderate/Heavy/Manual)
+- Limiter (hard ceiling, auto-enabled with compressor)
+- Noise gate (configurable threshold, integrates with VOX)
+
+DSP settings are persisted per-radio in the backend config YAML and loaded on page init.
 
 ### 3. Visualization Data
 
@@ -328,8 +341,31 @@ riglet/
         api.ts                    # Typed REST client
         websocket.ts              # Control WebSocket with reconnect
         reconnect.ts              # Restart polling utility
-        audio/                    # AudioManager, PCM worklet processor
+        audio/                    # AudioManager, PCM worklet, DSP chains
+          audio-manager.ts        # AudioContext lifecycle, chain wiring
+          dsp-chain.ts            # RxDspChain (v0.3.0: extended with HPF, LPF, peak, NB)
+          tx-dsp-chain.ts         # TxDspChain (v0.3.0: new TX processing chain)
+          pcm-worklet-processor.js # s16le ring buffer worklet
+          nr-worklet.js           # Noise reduction AudioWorklet
+          nb-worklet.js           # Noise blanker AudioWorklet (v0.3.0)
+          noise-gate-worklet.js   # TX noise gate AudioWorklet (v0.3.0)
+          vox.ts                  # VOX detector
+          lufs.ts                 # LUFS metering
         components/               # UI components (waterfall, controls, meters)
+        components/dsp/           # DSP UI components (v0.3.0)
+          RxDspPillRow.svelte     # Pill row container for RX DSP
+          DspPill.svelte          # Generic toggle pill
+          DspPopover.svelte       # Generic config popover
+          HighpassConfig.svelte   # HPF config controls
+          LowpassConfig.svelte    # LPF config controls
+          BandpassConfig.svelte   # BP preset + custom config
+          NotchConfig.svelte      # Notch filter config
+          PeakFilterConfig.svelte # Peak filter config
+          NoiseBlankerConfig.svelte # NB config
+          NrConfig.svelte         # NR config
+          CompressorConfig.svelte # Compressor config
+          EqConfig.svelte         # 3-band EQ config
+          TxDspMenu.svelte        # TX DSP modal/slide-out
         components/wizard/        # Setup wizard step components
 ```
 
@@ -401,6 +437,227 @@ Building on v0.1.0, v0.2.0 expands Riglet into its full vision:
 - Riglet Snout hardware
 - Hardware dial integration (design for it, but do not implement)
 
+## v0.3.0 Goals -- Per-Radio DSP Chains
+
+v0.3.0 replaces the existing single-purpose RX DSP chain with a fully independent, per-radio dual-chain DSP architecture: one chain for the microphone (TX) path and one for the receive (RX) path. Each radio gets its own pair of chains. DSP settings are persisted per-radio so they survive page reloads.
+
+### Problem Statement
+
+v0.2.0 delivered a basic RX-only DSP chain (bandpass, notch, NR, compressor, 3-band EQ). This is insufficient for serious operating:
+
+1. **No TX audio processing.** Operators need highpass/lowpass filtering, EQ, compression/limiting, and a noise gate on their microphone signal before it reaches the radio. Without this, transmitted audio quality depends entirely on the raw microphone, which is rarely acceptable.
+2. **The RX chain is missing several standard receiver DSP features**: audio peak filter, noise blanker (for AC/ground hum), and preset-based bandpass configurations (2.4 kHz voice, 500 Hz CW, etc.).
+3. **DSP settings are not persisted.** Every page reload resets all DSP controls to defaults.
+4. **The UI for DSP controls does not match the operational workflow.** RX DSP controls should be immediately accessible as compact pills below the frequency display. TX DSP controls should be co-located with the PTT button and accessed via a configuration menu.
+
+### Architecture: Where DSP Processing Happens
+
+All DSP runs client-side in the browser via the Web Audio API. This is the correct choice for Riglet because:
+
+- The Raspberry Pi 4 has limited CPU headroom; offloading DSP to the operator's browser machine (laptop/desktop) is free.
+- Web Audio API provides hardware-accelerated BiquadFilterNode, DynamicsCompressorNode, and the AudioWorklet API for custom processors -- all at audio-thread priority with deterministic timing.
+- Latency is minimal: Web Audio nodes process in 128-sample render quanta (~8ms at 16 kHz), well within the acceptable range.
+
+**Decision: No backend changes for DSP processing.** The backend continues to send/receive raw PCM. All filtering, EQ, compression, gating, and noise reduction happen in browser Web Audio graphs.
+
+**Decision: DSP settings persistence via backend config.** Settings are saved to the backend config YAML (per-radio `dsp` section) rather than localStorage. This ensures settings survive browser changes, incognito mode, and multi-device access. A debounced save (500ms after last change) prevents hammering the config endpoint during rapid adjustment. The frontend holds working state; the backend is the durable store.
+
+### DSP Chain Architecture
+
+#### RX Chain (Receive Path)
+
+Signal flow (unchanged entry point -- PCM from WebSocket feeds the existing AudioWorklet):
+
+```
+PCM worklet output -> highpass -> lowpass -> bandpass -> notch -> peak_filter -> noise_blanker -> NR -> compressor -> bass_eq -> mid_eq -> treble_eq -> squelch_gate -> volume_gain -> destination
+```
+
+New nodes added to the existing `DspChain` class:
+- **High-pass filter** (BiquadFilterNode, type: highpass) -- configurable 100-300 Hz cutoff
+- **Low-pass filter** (BiquadFilterNode, type: lowpass) -- configurable 2500-3500 Hz cutoff
+- **Audio peak filter** (BiquadFilterNode, type: peaking, high Q) -- narrow peak to pull a signal out of noise
+- **Noise blanker** (custom AudioWorklet) -- detects and blanks impulse noise from AC hum, motor noise, etc. Uses a threshold-based sample replacement algorithm.
+- **Bandpass presets** -- not a new node, but preset configurations that set highpass + lowpass + bandpass in one click: "2.4 kHz Voice", "500 Hz CW", "2.7 kHz SSB", "6 kHz AM", "Custom"
+
+The existing bandpass, notch, NR, compressor, and 3-band EQ nodes remain as-is but are repositioned in the chain as shown above.
+
+#### TX Chain (Transmit Path -- New)
+
+Signal flow (mic capture feeds into this chain before PCM encoding):
+
+```
+mic_source -> highpass -> lowpass -> bass_eq -> mid_eq -> treble_eq -> compressor -> limiter -> noise_gate -> tx_pcm_worklet
+```
+
+The TX chain is a new `TxDspChain` class, structurally similar to `DspChain` but with different defaults and different nodes:
+
+- **High-pass filter** (BiquadFilterNode, type: highpass) -- configurable 100-300 Hz, default 200 Hz. Removes breath pops, handling rumble.
+- **Low-pass filter** (BiquadFilterNode, type: lowpass) -- configurable 2500-3500 Hz, default 2800 Hz. Removes hiss and keeps signal within radio bandwidth.
+- **3-band equalizer** (3x BiquadFilterNode: lowshelf, peaking, highshelf) -- same structure as RX EQ but with TX-oriented defaults (slight mid boost for intelligibility).
+- **Vocal compressor** (DynamicsCompressorNode) -- with presets:
+  - "Mild": ratio 2:1, threshold -20 dB, attack 10ms, release 200ms
+  - "Moderate": ratio 4:1, threshold -24 dB, attack 3ms, release 150ms
+  - "Heavy": ratio 8:1, threshold -30 dB, attack 1ms, release 100ms
+  - "Manual": all parameters user-adjustable (ratio, threshold, attack, release)
+- **Limiter** (DynamicsCompressorNode with ratio 20:1, threshold -3 dB, attack 0.1ms, release 50ms) -- hard ceiling to prevent clipping/overmodulation. Always active when compressor is enabled.
+- **Noise gate** (custom AudioWorklet or gain node with RMS threshold detection) -- configurable threshold in dBFS. When mic signal is below threshold, output is muted. Essential for VOX operation to prevent ambient noise from keying the transmitter. Integrates with the existing VoxDetector: the noise gate threshold should be at or below the VOX threshold.
+
+**Key design decision: The TX chain processes audio before it reaches the PCM worklet for encoding.** Currently, the mic MediaStreamSource connects directly to the PCM worklet's input. With the TX chain, the connection becomes:
+
+```
+mic_source -> TxDspChain.input ... TxDspChain.output -> pcm_worklet (input)
+```
+
+The PCM worklet's TX capture path then encodes the already-processed audio.
+
+#### Web Audio Graph Integration
+
+The current audio graph is:
+
+```
+[PCM worklet] ---output---> [DspChain] -> [squelch] -> [volume] -> [speakers]
+[mic source] ---input----> [PCM worklet] (TX capture in worklet)
+```
+
+The v0.3.0 graph becomes:
+
+```
+RX: [PCM worklet] ---output---> [RxDspChain] -> [squelch] -> [volume] -> [speakers]
+TX: [mic source] -> [TxDspChain] ---output---> [PCM worklet] (TX capture in worklet)
+```
+
+Both chains are instantiated per-radio by `AudioManager`. `AudioManager.startRx()` builds the RX chain (as it does today, with additional nodes). `AudioManager.startTx()` builds the TX chain and inserts it between the mic source and the worklet node.
+
+### Config Schema Additions
+
+Add a `dsp` field to `RadioConfig` in `server/config.py`:
+
+```python
+class RxDspConfig(BaseModel):
+    highpass_enabled: bool = False
+    highpass_hz: int = 200          # 100-300
+    lowpass_enabled: bool = False
+    lowpass_hz: int = 3000          # 2500-3500
+    bandpass_enabled: bool = False
+    bandpass_preset: str = "voice"  # "voice", "cw", "ssb", "am", "custom"
+    bandpass_center_hz: int = 1500  # only used when preset is "custom"
+    bandpass_width_hz: int = 2400   # only used when preset is "custom"
+    notch_enabled: bool = False
+    notch_center_hz: int = 1000
+    notch_width_hz: int = 50
+    peak_filter_enabled: bool = False
+    peak_filter_hz: int = 800
+    peak_filter_q: float = 10.0
+    noise_blanker_enabled: bool = False
+    noise_blanker_threshold: float = 0.5  # 0.0-1.0
+    nr_enabled: bool = False
+    nr_amount: float = 0.5
+    compressor_enabled: bool = False
+    compressor_threshold_db: float = -24.0
+    compressor_ratio: float = 4.0
+    eq_enabled: bool = False
+    bass_gain_db: float = 0.0
+    mid_gain_db: float = 0.0
+    treble_gain_db: float = 0.0
+
+class TxDspConfig(BaseModel):
+    highpass_enabled: bool = True
+    highpass_hz: int = 200          # 100-300
+    lowpass_enabled: bool = True
+    lowpass_hz: int = 2800          # 2500-3500
+    eq_enabled: bool = False
+    bass_gain_db: float = 0.0
+    mid_gain_db: float = 2.0       # slight mid boost default
+    treble_gain_db: float = 0.0
+    compressor_enabled: bool = False
+    compressor_preset: str = "moderate"  # "mild", "moderate", "heavy", "manual"
+    compressor_threshold_db: float = -24.0
+    compressor_ratio: float = 4.0
+    compressor_attack_ms: float = 3.0
+    compressor_release_ms: float = 150.0
+    limiter_enabled: bool = False   # auto-enabled with compressor
+    noise_gate_enabled: bool = False
+    noise_gate_threshold_db: float = -50.0
+
+class DspConfig(BaseModel):
+    rx: RxDspConfig = RxDspConfig()
+    tx: TxDspConfig = TxDspConfig()
+```
+
+`RadioConfig` gets a new field: `dsp: DspConfig = DspConfig()`.
+
+A new REST endpoint `POST /api/radio/{id}/dsp` accepts partial DSP config updates and saves them to the config file (debounced server-side or client-side). `GET /api/radio/{id}/dsp` returns the current DSP config for a radio.
+
+### Frontend Component Plan
+
+#### RX DSP Controls -- Pill Row Below Frequency Display
+
+The RX DSP controls appear as a horizontal row of compact pill buttons directly below the frequency display (inside the same layout panel). Each pill represents one DSP feature:
+
+```
+[ HPF ] [ LPF ] [ BP: Voice ] [ Notch ] [ Peak ] [ NB ] [ NR ] [ Comp ] [ EQ ]
+```
+
+Pill behavior:
+- **Inactive**: dark background, dim text
+- **Active**: colored background (blue for filters, green for NR, orange for compression), bright text
+- **Click**: toggles the feature on/off
+- **Click when active** (or right-click / long-press): opens a configuration popover/dropdown with the feature's parameters and an explicit on/off toggle
+- **Keyboard**: Enter/Space toggles, arrow keys navigate between pills
+
+Component breakdown:
+- `RxDspPillRow.svelte` -- container, renders pills, manages popover state
+- `DspPill.svelte` -- individual pill (generic: label, active state, color, click handler)
+- `DspPopover.svelte` -- generic popover container (positioned below pill, closes on outside click/Escape)
+- `HighpassConfig.svelte` -- frequency slider 100-300 Hz
+- `LowpassConfig.svelte` -- frequency slider 2500-3500 Hz
+- `BandpassConfig.svelte` -- preset selector + custom range controls
+- `NotchConfig.svelte` -- center/width sliders + auto-notch toggle (future)
+- `PeakFilterConfig.svelte` -- frequency + Q sliders
+- `NoiseBlankerConfig.svelte` -- threshold slider
+- `NrConfig.svelte` -- amount slider
+- `CompressorConfig.svelte` -- threshold/ratio sliders
+- `EqConfig.svelte` -- bass/mid/treble sliders
+
+The existing `DspPanel.svelte` (accordion-style) is replaced by this pill row for the RX chain. The old component can be removed or kept as an alternative layout option.
+
+#### TX DSP Controls -- PTT Box Configuration Menu
+
+The TX DSP controls are accessed via a configuration button (gear icon) near the PTT button. Clicking it opens a modal or slide-out panel with all TX chain settings. This is a less-frequently-accessed configuration surface -- operators set it once and rarely change it during operation.
+
+Component breakdown:
+- `TxDspMenu.svelte` -- modal/slide-out panel containing all TX DSP controls
+- `TxFilterSection.svelte` -- highpass + lowpass controls
+- `TxEqSection.svelte` -- 3-band EQ
+- `TxCompressorSection.svelte` -- preset selector + manual controls (threshold, ratio, attack, release)
+- `TxLimiterSection.svelte` -- threshold display (auto-managed with compressor)
+- `TxNoiseGateSection.svelte` -- threshold slider + link to VOX threshold
+
+#### State Management
+
+DSP state is managed by the chain classes themselves (`RxDspChain` and `TxDspChain`). The Svelte components read from and write to these classes. On any parameter change:
+
+1. The chain class updates the Web Audio node immediately (real-time audio change)
+2. A Svelte `$effect` debounces and calls `POST /api/radio/{id}/dsp` to persist
+
+On page load:
+1. `AudioManager.startRx()` / `startTx()` build the chains with default parameters
+2. `GET /api/radio/{id}/dsp` fetches persisted settings
+3. Settings are applied to the chain classes, which update their Web Audio nodes
+
+### Trade-offs and Decisions
+
+| Decision | Rationale |
+|----------|-----------|
+| Separate RX and TX chain classes | They have different nodes, different defaults, and different UI surfaces. A single class would be overloaded with conditional logic. |
+| Noise blanker as AudioWorklet, not BiquadFilter | Noise blanking requires time-domain impulse detection and sample replacement, which is not expressible as a frequency-domain filter. An AudioWorklet gives sample-level control. |
+| Bandpass presets as coordinated filter settings | Rather than adding a new node type, presets configure the existing highpass + lowpass + bandpass nodes in concert. Simpler, fewer nodes in the graph. |
+| Limiter as a separate DynamicsCompressorNode | A limiter is just a compressor with extreme ratio (20:1) and fast attack. Using a dedicated node keeps the compressor and limiter independently tunable. |
+| Persist DSP to backend config, not localStorage | Backend config is the single source of truth for all per-radio settings. Keeps DSP settings alongside radio config, survives browser/device changes, and is included in config export/import. |
+| TX chain inserted before PCM worklet, not after | Processing before encoding means the PCM sent over WebSocket is already processed. The operator hears what the radio will transmit. The backend does not need to know about DSP. |
+| Pills for RX, menu for TX | RX DSP is adjusted during operation (reacting to band conditions). TX DSP is configured once per session. Different interaction frequencies demand different UI patterns. |
+| RX pills below frequency display, not in separate panel | Keeps the most-used DSP controls in the operator's primary visual field without requiring panel navigation. |
+
 ---
 
 ## Risks and Mitigations
@@ -416,6 +673,11 @@ Building on v0.1.0, v0.2.0 expands Riglet into its full vision:
 | 3D spectrogram WebGL performance on low-end clients | Medium | Use lightweight WebGL (e.g., Three.js or raw WebGL2). Provide a fallback 2D mode. Test on integrated GPUs. |
 | VOX hot-mic in noisy environments | Medium | Require an audio gate threshold before VOX engages. Make threshold configurable. Default to PTT-only mode. |
 | Browser scroll-wheel hijacking page scroll | Low | Only capture scroll events when pointer is directly over a dial control. Use passive event listeners elsewhere. |
+| TX DSP chain adds latency to mic path | Low | Web Audio nodes process in 128-sample quanta (~8ms at 16 kHz). Even with 8 nodes in series, total added latency is under 15ms -- imperceptible for voice. |
+| Noise blanker AudioWorklet browser compatibility | Low | AudioWorklet is supported in all modern browsers (Chrome 66+, Firefox 76+, Safari 14.1+). The existing NR worklet already validates this path. |
+| DSP config save storms during rapid adjustment | Medium | Client-side debounce (500ms) coalesces rapid parameter changes into a single save. The UI remains responsive because audio changes are instant (Web Audio node updates) while persistence is async. |
+| Popover positioning on small screens | Medium | Use a utility like Floating UI (Popper successor) or manual viewport-aware positioning. Fall back to a bottom sheet on narrow screens. |
+| Per-radio DSP config bloats config.yaml | Low | DSP config adds ~40 lines per radio. For 1-3 radios this is negligible. The YAML remains human-readable. |
 
 ---
 
@@ -432,6 +694,10 @@ Building on v0.1.0, v0.2.0 expands Riglet into its full vision:
 | 7 | Visualization architecture | **Pluggable renderers** -- all visualization modes receive the same data (FFT bins + raw PCM). A renderer interface allows adding new visualizations without changing the data pipeline. |
 | 8 | Layout system | **JSON-serializable layout configs** -- each layout is a JSON document describing which components are visible and their arrangement. Stored in browser localStorage and optionally exported as files. |
 | 9 | Input abstraction | **Event-driven control model** -- controls respond to abstract "change" events, not specific input devices. This allows keyboard, mouse scroll, touch, and future hardware controllers to drive the same controls. |
+| 10 | DSP chain separation | **Independent RX and TX chains** -- separate class, separate node graph, separate UI surface. RX chain extends the existing `DspChain`; TX chain is a new `TxDspChain` class. Both are per-radio, instantiated by `AudioManager`. |
+| 11 | DSP persistence | **Backend config, not localStorage** -- DSP settings are stored in the YAML config under each radio's `dsp` section. Frontend debounces saves. This keeps all per-radio state in one place and survives browser/device changes. |
+| 12 | RX DSP UI pattern | **Pill row below frequency display** -- compact, always-visible toggles for the most frequently adjusted DSP features. Click toggles, click-when-active opens configuration popover. Replaces the accordion-style DspPanel. |
+| 13 | TX DSP UI pattern | **Configuration menu near PTT** -- a gear button opens a modal/slide-out with all TX chain settings. Less frequently adjusted than RX, so it can afford a heavier interaction pattern. |
 
 ### Config Validation
 

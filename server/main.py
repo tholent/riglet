@@ -22,6 +22,7 @@ from devices import DeviceEvent, UdevMonitor
 from routers.audio import router as _audio_router
 from routers.cat import router as _cat_router
 from routers.devices import router as _devices_router
+from routers.dsp import router as _dsp_router
 from routers.system import router as _system_router
 from routers.waterfall import router as _waterfall_router
 from state import RadioManager
@@ -75,6 +76,7 @@ app.include_router(_devices_router, prefix="/api")
 app.include_router(_cat_router, prefix="/api")
 app.include_router(_audio_router, prefix="/api")
 app.include_router(_waterfall_router, prefix="/api")
+app.include_router(_dsp_router, prefix="/api")
 
 # Mount static SPA last — production path first, fallback to ui/build for dev.
 # Must come after routers so the "/" catch-all doesn't shadow /api/* routes.

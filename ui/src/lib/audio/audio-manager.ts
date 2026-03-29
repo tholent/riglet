@@ -19,7 +19,7 @@
  *   - Set onTxChunk callback to forward captured TX audio to the WebSocket.
  */
 
-import { DspChain } from './dsp-chain.js';
+import { RxDspChain } from './rx-dsp-chain.js';
 
 /** Configuration for the squelch audio gate. */
 export interface SquelchParams {
@@ -41,8 +41,8 @@ export class AudioManager {
 	// Squelch gate gain node (0 = muted, 1 = open)
 	private squelchNode: GainNode | null = null;
 
-	// DSP filter/EQ/compressor chain
-	private dspChain: DspChain | null = null;
+	// DSP filter/EQ chain (RX path)
+	private rxDspChain: RxDspChain | null = null;
 
 	private micStream: MediaStream | null = null;
 	private micSource: MediaStreamAudioSourceNode | null = null;
@@ -108,14 +108,14 @@ export class AudioManager {
 			}
 		};
 
-		// Build DSP filter/EQ/compressor chain (async to load NR worklet)
-		this.dspChain = new DspChain(this.audioCtx);
-		await this.dspChain.build();
+		// Build RX DSP chain (async to load NR worklet)
+		this.rxDspChain = new RxDspChain(this.audioCtx);
+		await this.rxDspChain.build();
 
-		// Wire up full DSP chain:
-		// worklet -> bandpass -> notch -> compressor -> bass -> mid -> treble -> squelch -> volume -> speakers
-		this.workletNode.connect(this.dspChain.input);
-		this.dspChain.output.connect(this.squelchNode);
+		// Wire up full RX DSP chain:
+		// worklet -> rxDspChain -> squelch -> volume -> speakers
+		this.workletNode.connect(this.rxDspChain.input);
+		this.rxDspChain.output.connect(this.squelchNode);
 		this.squelchNode.connect(this.gainNode);
 		this.gainNode.connect(this.audioCtx.destination);
 	}
@@ -126,15 +126,15 @@ export class AudioManager {
 	 * Fires onRxPcmFloat at ~60 fps for LUFS metering and viz.
 	 */
 	async startMicAsRx(): Promise<void> {
-		if (!this.audioCtx || !this.dspChain) return;
+		if (!this.audioCtx || !this.rxDspChain) return;
 		try {
 			this.micRxStream = await navigator.mediaDevices.getUserMedia({
 				audio: { sampleRate: 16000, channelCount: 1, echoCancellation: true },
 				video: false,
 			});
 			this.micRxSource = this.audioCtx.createMediaStreamSource(this.micRxStream);
-			// Feed mic through the DSP chain → squelch → volume → speakers
-			this.micRxSource.connect(this.dspChain.input);
+			// Feed mic through the RX DSP chain → squelch → volume → speakers
+			this.micRxSource.connect(this.rxDspChain!.input);
 
 			// Resume the AudioContext — it starts suspended in most browsers
 			// until a user gesture.  The getUserMedia permission prompt qualifies.
@@ -191,8 +191,8 @@ export class AudioManager {
 			clearTimeout(this.squelchHoldTimer);
 			this.squelchHoldTimer = null;
 		}
-		this.dspChain?.destroy();
-		this.dspChain = null;
+		this.rxDspChain?.destroy();
+		this.rxDspChain = null;
 		this.gainNode?.disconnect();
 		this.squelchNode?.disconnect();
 		this.workletNode?.disconnect();
@@ -207,10 +207,10 @@ export class AudioManager {
 	// DSP chain access
 	// ------------------------------------------------------------------
 
-	/** Returns the DSP chain for filter/EQ/compressor control.
+	/** Returns the RX DSP chain for filter control.
 	 *  Returns null if RX is not started yet. */
-	getDspChain(): DspChain | null {
-		return this.dspChain;
+	getRxDspChain(): RxDspChain | null {
+		return this.rxDspChain;
 	}
 
 	async startTx(): Promise<void> {

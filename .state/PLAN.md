@@ -9,7 +9,7 @@
 | #  | Task                                                              | Priority | Agent      | Status | Depends On | Notes                                           |
 |:---|:------------------------------------------------------------------|:---------|:-----------|:-------|:-----------|:------------------------------------------------|
 | 01 | Config schema: add RxDspConfig and TxDspConfig Pydantic models    | P0       | @developer | [x]    | --         | Nested under RadioConfig                        |
-| 02 | DSP config API: GET/PATCH per-radio DSP settings endpoint         | P0       | @developer | [ ]    | 01         | `routers/dsp.py`, mount on `/api`               |
+| 02 | DSP config API: GET/PATCH per-radio DSP settings endpoint         | P0       | @developer | [x]    | 01         | `routers/dsp.py`, mount on `/api`               |
 | 03 | RxDspChain: highpass filter node (100-300 Hz)                     | P1       | @developer | [x]    | --         | BiquadFilterNode highpass in `rx-dsp-chain.ts`  |
 | 04 | RxDspChain: lowpass filter node (2.5-3.5 kHz)                    | P1       | @developer | [x]    | --         | BiquadFilterNode lowpass in `rx-dsp-chain.ts`   |
 | 05 | RxDspChain: peak filter node                                     | P1       | @developer | [x]    | --         | BiquadFilterNode peaking in `rx-dsp-chain.ts`   |
@@ -17,12 +17,12 @@
 | 07 | RxDspChain: notch filter node (auto/manual, BiquadFilterNode)    | P1       | @developer | [x]    | --         | Manual freq+Q or auto-detect                    |
 | 08 | RxDspChain: bandpass filter (presets + manual range)              | P1       | @developer | [x]    | --         | Presets: 2.4 kHz voice, 500 Hz CW, manual       |
 | 09 | RxDspChain: DSP noise reduction AudioWorklet                     | P1       | @developer | [x]    | --         | Spectral subtraction in `nr-worklet-processor.ts`|
-| 10 | Wire RxDspChain into AudioManager RX playback path               | P0       | @developer | [ ]    | 03-09      | Replace existing DspChain with RxDspChain       |
+| 10 | Wire RxDspChain into AudioManager RX playback path               | P0       | @developer | [x]    | 03-09      | Replace existing DspChain with RxDspChain       |
 | 11 | TxDspChain: highpass + lowpass filter nodes                      | P1       | @developer | [x]    | --         | New class in `tx-dsp-chain.ts`                  |
-| 12 | TxDspChain: 3-band EQ (3x BiquadFilterNode)                     | P1       | @developer | [ ]    | 11         | lowshelf, peaking, highshelf                    |
-| 13 | TxDspChain: vocal compressor (DynamicsCompressorNode)            | P1       | @developer | [ ]    | 11         | Presets + manual params                         |
-| 14 | TxDspChain: limiter stage (DynamicsCompressorNode, high ratio)   | P1       | @developer | [ ]    | 11         | ratio >= 20, knee 0                             |
-| 15 | TxDspChain: noise gate (threshold-based gate node)               | P1       | @developer | [ ]    | 11         | GainNode snapped 0/1 by analyser RMS            |
+| 12 | TxDspChain: 3-band EQ (3x BiquadFilterNode)                     | P1       | @developer | [x]    | 11         | lowshelf, peaking, highshelf                    |
+| 13 | TxDspChain: vocal compressor (DynamicsCompressorNode)            | P1       | @developer | [x]    | 11         | Presets + manual params                         |
+| 14 | TxDspChain: limiter stage (DynamicsCompressorNode, high ratio)   | P1       | @developer | [x]    | 11         | ratio >= 20, knee 0                             |
+| 15 | TxDspChain: noise gate (threshold-based gate node)               | P1       | @developer | [x]    | 11         | GainNode snapped 0/1 by analyser RMS            |
 | 16 | Wire TxDspChain into AudioManager TX capture path                | P0       | @developer | [ ]    | 11-15      | Insert before PCM worklet                       |
 | 17 | RxDspPillRow component                                           | P1       | @developer | [ ]    | 10         | Pill row below freq display, active color       |
 | 18 | RxDspPopover component                                           | P1       | @developer | [ ]    | 17         | Per-filter config panel with on/off toggle      |
@@ -32,7 +32,7 @@
 | 22 | Integrate TxDspPanel into PTT area                               | P0       | @developer | [ ]    | 19, 20     | `routes/+page.svelte`                           |
 | 23 | Load DSP config from backend on radio connect                    | P0       | @developer | [ ]    | 02, 10, 16 | Fetch GET on WS open, apply to chains           |
 | 24 | Debounced save DSP config to backend on parameter change         | P0       | @developer | [ ]    | 02, 23     | 500ms debounce, PATCH on change                 |
-| 25 | Backend: unit tests for RxDspConfig and TxDspConfig validation   | P0       | @developer | [ ]    | 01         | `tests/test_dsp_config.py`                      |
+| 25 | Backend: unit tests for RxDspConfig and TxDspConfig validation   | P0       | @developer | [x]    | 01         | `tests/test_dsp_config.py`                      |
 | 26 | Backend: integration tests for DSP config GET/PATCH              | P0       | @developer | [ ]    | 02         | `tests/test_dsp_api.py`                         |
 | 27 | Frontend: unit tests for RxDspChain node wiring                  | P0       | @developer | [ ]    | 10         | Vitest, mock AudioContext                       |
 | 28 | Frontend: unit tests for TxDspChain node wiring                  | P0       | @developer | [ ]    | 16         | Vitest, mock AudioContext                       |

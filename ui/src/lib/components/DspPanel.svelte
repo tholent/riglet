@@ -1,17 +1,15 @@
 <script lang="ts">
-	import type { DspChain } from '$lib/audio/dsp-chain.js';
+	import type { RxDspChain } from '$lib/audio/rx-dsp-chain.js';
 	import { scrollWheel } from '$lib/actions/scrollwheel.js';
 
 	interface Props {
-		dspChain: DspChain | null;
+		dspChain: RxDspChain | null;
 	}
 	let { dspChain }: Props = $props();
 
 	// Section open/closed state
 	let filtersOpen = $state(true);
 	let nrOpen = $state(false);
-	let eqOpen = $state(false);
-	let compressorOpen = $state(false);
 
 	// Filter params
 	let filtersEnabled = $state(false);
@@ -24,17 +22,6 @@
 	// Noise reduction
 	let nrEnabled = $state(false);
 	let nrAmount = $state(0.5);
-
-	// EQ
-	let eqEnabled = $state(false);
-	let bassGain = $state(0);
-	let midGain = $state(0);
-	let trebleGain = $state(0);
-
-	// Compressor
-	let compressorEnabled = $state(false);
-	let compThreshold = $state(-24);
-	let compRatio = $state(4);
 
 	// --- Apply changes immediately when params change ---
 
@@ -59,24 +46,6 @@
 		dspChain.enableNr(nrEnabled);
 		if (nrEnabled) {
 			dspChain.setNrAmount(nrAmount);
-		}
-	});
-
-	$effect(() => {
-		if (!dspChain) return;
-		dspChain.enableEq(eqEnabled);
-		if (eqEnabled) {
-			dspChain.setBass(bassGain);
-			dspChain.setMid(midGain);
-			dspChain.setTreble(trebleGain);
-		}
-	});
-
-	$effect(() => {
-		if (!dspChain) return;
-		dspChain.enableCompressor(compressorEnabled);
-		if (compressorEnabled) {
-			dspChain.setCompressor(compThreshold, compRatio, 0.003, 0.25);
 		}
 	});
 
@@ -214,115 +183,6 @@
 					aria-label="Noise reduction amount (0 to 1)"
 				/>
 				<span class="val">{nrAmount.toFixed(2)}</span>
-			</div>
-		</div>
-	</details>
-
-	<!-- ── EQ ──────────────────────────────────────────────── -->
-	<details bind:open={eqOpen}>
-		<summary class="section-header">
-			<span>EQ</span>
-			<label class="toggle">
-				<input onclick={(e) => e.stopPropagation()}
-					type="checkbox"
-					bind:checked={eqEnabled}
-					aria-label="Enable equalizer"
-				/>
-				<span class="toggle-label">{eqEnabled ? 'On' : 'Off'}</span>
-			</label>
-		</summary>
-
-		<div class="section-body" class:disabled={!eqEnabled}>
-			<div class="row" use:scrollWheel={{ onDelta: (d) => { bassGain = nudge(bassGain, -12, 12, 1, d); } }}>
-				<label for="eq-bass">Bass (dB)</label>
-				<input
-					id="eq-bass"
-					type="range"
-					min="-12"
-					max="12"
-					step="1"
-					bind:value={bassGain}
-					disabled={!eqEnabled}
-					aria-label="Bass gain in dB"
-				/>
-				<span class="val">{bassGain > 0 ? '+' : ''}{bassGain}</span>
-			</div>
-
-			<div class="row" use:scrollWheel={{ onDelta: (d) => { midGain = nudge(midGain, -12, 12, 1, d); } }}>
-				<label for="eq-mid">Mid (dB)</label>
-				<input
-					id="eq-mid"
-					type="range"
-					min="-12"
-					max="12"
-					step="1"
-					bind:value={midGain}
-					disabled={!eqEnabled}
-					aria-label="Mid gain in dB"
-				/>
-				<span class="val">{midGain > 0 ? '+' : ''}{midGain}</span>
-			</div>
-
-			<div class="row" use:scrollWheel={{ onDelta: (d) => { trebleGain = nudge(trebleGain, -12, 12, 1, d); } }}>
-				<label for="eq-treble">Treble (dB)</label>
-				<input
-					id="eq-treble"
-					type="range"
-					min="-12"
-					max="12"
-					step="1"
-					bind:value={trebleGain}
-					disabled={!eqEnabled}
-					aria-label="Treble gain in dB"
-				/>
-				<span class="val">{trebleGain > 0 ? '+' : ''}{trebleGain}</span>
-			</div>
-		</div>
-	</details>
-
-	<!-- ── Compressor ──────────────────────────────────────── -->
-	<details bind:open={compressorOpen}>
-		<summary class="section-header">
-			<span>Compressor</span>
-			<label class="toggle">
-				<input onclick={(e) => e.stopPropagation()}
-					type="checkbox"
-					bind:checked={compressorEnabled}
-					aria-label="Enable compressor"
-				/>
-				<span class="toggle-label">{compressorEnabled ? 'On' : 'Off'}</span>
-			</label>
-		</summary>
-
-		<div class="section-body" class:disabled={!compressorEnabled}>
-			<div class="row" use:scrollWheel={{ onDelta: (d) => { compThreshold = nudge(compThreshold, -60, 0, 1, d); } }}>
-				<label for="comp-threshold">Threshold (dB)</label>
-				<input
-					id="comp-threshold"
-					type="range"
-					min="-60"
-					max="0"
-					step="1"
-					bind:value={compThreshold}
-					disabled={!compressorEnabled}
-					aria-label="Compressor threshold in dBFS"
-				/>
-				<span class="val">{compThreshold}</span>
-			</div>
-
-			<div class="row" use:scrollWheel={{ onDelta: (d) => { compRatio = nudge(compRatio, 1, 20, 1, d); } }}>
-				<label for="comp-ratio">Ratio</label>
-				<input
-					id="comp-ratio"
-					type="range"
-					min="1"
-					max="20"
-					step="1"
-					bind:value={compRatio}
-					disabled={!compressorEnabled}
-					aria-label="Compressor ratio"
-				/>
-				<span class="val">{compRatio}:1</span>
 			</div>
 		</div>
 	</details>
