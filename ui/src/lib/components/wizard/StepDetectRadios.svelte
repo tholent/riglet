@@ -14,30 +14,33 @@
 	let catTestResults = $state<Record<string, { success: boolean; freq?: number; error?: string }>>({});
 	let testingCat = $state<Record<string, boolean>>({});
 
+	let autoPopulateDone = false;
+
 	$effect(() => {
 		Promise.all([getSerialDevices(), getHamlibModels()])
 			.then(([devs, models]) => {
 				devices = devs;
 				hamlibModels = models;
-				// Auto-populate radios from detected devices that aren't already configured
-				const configured = new Set(radios.map((r) => r.serial_port));
-				const newRadios = devs
-					.filter((d) => !configured.has(d.port))
-					.map((d, i): RadioConfig => ({
-						id: `radio${radios.length + i + 1}`,
-						name: d.description || `Radio ${radios.length + i + 1}`,
+				// Auto-populate only on first load and only when no radios are configured yet
+				if (!autoPopulateDone && radios.length === 0) {
+					autoPopulateDone = true;
+					const newRadios = devs.map((d, i): RadioConfig => ({
+						id: `radio${i + 1}`,
+						name: d.description || `Radio ${i + 1}`,
 						hamlib_model: d.guessed_model ?? 1,
 						serial_port: d.port,
 						baud_rate: 19200,
 						ptt_method: 'cat',
 						audio_source: '',
 						audio_sink: '',
-						rigctld_port: 4532 + radios.length + i,
+						rigctld_port: 4532 + i,
 						enabled: false,
 						polling_interval_ms: 100,
+						bands: [],
 					}));
-				if (newRadios.length > 0) {
-					onUpdate([...radios, ...newRadios]);
+					if (newRadios.length > 0) {
+						onUpdate(newRadios);
+					}
 				}
 			})
 			.catch(console.error)
@@ -189,7 +192,12 @@
 
 		<div class="add-btns">
 			<button class="add-btn" onclick={addManual}>+ Add Real Radio</button>
-			<button class="add-btn sim" onclick={addSimulated}>+ Add Simulated Radio</button>
+			<button
+				class="add-btn sim"
+				onclick={addSimulated}
+				disabled={radios.some((r) => r.type === 'simulated')}
+				title={radios.some((r) => r.type === 'simulated') ? 'Only one simulated radio is supported' : undefined}
+			>+ Add Simulated Radio</button>
 		</div>
 	{/if}
 </div>
@@ -274,7 +282,8 @@
 		cursor: pointer;
 	}
 
-	.add-btn:hover { border-color: #aaa; color: #fff; }
+	.add-btn:hover:not(:disabled) { border-color: #aaa; color: #fff; }
+	.add-btn:disabled { opacity: 0.35; cursor: not-allowed; }
 
 	.add-btn.sim { border-color: #7a5; color: #7a5; }
 	.add-btn.sim:hover { border-color: #9c7; color: #9c7; }
