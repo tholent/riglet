@@ -94,7 +94,8 @@
 
 		// Tick marks + labels
 		const ticks = [-60, -40, -23, -18, -9, 0];
-		ctx.font = `${Math.max(7, Math.min(9, Math.round(h / 28)))}px monospace`;
+		const fontSize = Math.max(7, Math.min(9, Math.round(h / 28)));
+		ctx.font = `${fontSize}px monospace`;
 		ctx.textBaseline = 'middle';
 
 		for (const tick of ticks) {
@@ -116,6 +117,20 @@
 			ctx.textAlign = 'left';
 			ctx.fillText(label, barX + BAR_W + 3, y);
 		}
+
+		// Numeric readout — drawn at fixed position in bar so it never shifts
+		const readout = currentLufs <= MIN_LUFS - 1 ? '–∞' : currentLufs.toFixed(1);
+		// Use widest expected value to size the background consistently
+		const refWidth = ctx.measureText('-60.0').width;
+		const pad = 2;
+		const readX = barX + BAR_W / 2;
+		const readY = h - fontSize / 2 - pad;
+		ctx.fillStyle = 'rgba(0,0,0,0.75)';
+		ctx.fillRect(readX - refWidth / 2 - pad, readY - fontSize / 2 - pad, refWidth + pad * 2, fontSize + pad * 2);
+		ctx.fillStyle = '#bbb';
+		ctx.textAlign = 'center';
+		ctx.textBaseline = 'middle';
+		ctx.fillText(readout, readX, readY);
 	}
 
 	function animate() {
@@ -145,17 +160,13 @@
 		};
 	});
 
-	// Numeric readout formatted to 1 decimal place
-	const lufsLabel = $derived(
-		currentLufs <= MIN_LUFS - 1 ? '–∞ LUFS' : `${currentLufs.toFixed(1)} LUFS`,
-	);
 </script>
 
 <div
 	bind:this={containerEl}
 	class="lufs-meter"
 	class:fill-height={fillHeight}
-	aria-label={`Audio level: ${lufsLabel}`}
+	aria-label="Audio level meter"
 	role="meter"
 	aria-valuenow={Math.round(currentLufs)}
 	aria-valuemin={MIN_LUFS}
@@ -168,7 +179,6 @@
 		class="lufs-canvas"
 		aria-hidden="true"
 	></canvas>
-	<span class="lufs-label">{lufsLabel}</span>
 </div>
 
 <style>
@@ -199,11 +209,4 @@
 		display: block;
 	}
 
-	.lufs-label {
-		font-size: 0.62rem;
-		font-family: 'Courier New', monospace;
-		color: var(--color-text-muted, #888);
-		text-align: center;
-		white-space: nowrap;
-	}
 </style>
