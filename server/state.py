@@ -232,22 +232,61 @@ class RadioInstance:
             raise RigctldError(-8, f"Cannot parse get_mode response: {raw!r}")
         return mode
 
+    @staticmethod
+    def _sanitize_rigctld_param(value: str) -> str:
+        """Strip newlines, carriage returns, and null bytes from rigctld parameters.
+
+        Raises RigctldError if the result is empty or contains spaces (which
+        would break the space-delimited rigctld protocol).
+        """
+        if "\n" in value or "\r" in value or "\x00" in value:
+            raise RigctldError(-1, f"Invalid rigctld parameter (control chars): {value!r}")
+        if not value or " " in value:
+            raise RigctldError(-1, f"Invalid rigctld parameter: {value!r}")
+        return value
+
     async def set_freq(self, mhz: float) -> None:
-        """Set VFO frequency in MHz."""
+        """Set VFO frequency in MHz.
+
+        Raises RigctldError for non-positive or unreasonably large values.
+        Integer and float numeric parameters are type-coerced before being
+        passed to send_command, so they are not injectable via protocol splits.
+        """
+        if mhz <= 0:
+            raise RigctldError(-1, f"Frequency must be positive, got {mhz}")
+        if mhz > 500:
+            raise RigctldError(-1, f"Frequency {mhz} MHz exceeds maximum (500 MHz)")
         if self.simulation:
             self.freq = mhz
             return
-        hz = int(mhz * 1_000_000)
+        # Use round() rather than int() to avoid IEEE 754 truncation errors
+        # (e.g. 14.074 * 1_000_000 = 14073999.999... → truncates to 14073999).
+        hz = round(mhz * 1_000_000)
         await self.send_command(rf"+\set_freq {hz}")
         self.freq = mhz
 
     async def set_mode(self, mode: str) -> None:
-        """Set operating mode (e.g. USB, LSB, CW)."""
+        """Set operating mode (e.g. USB, LSB, CW).
+
+        Validates mode against the curated list for this radio's Hamlib model
+        before sending to rigctld, preventing newline-injection attacks.
+        Validation runs before the simulation short-circuit so simulation also
+        enforces the allowlist.
+        """
+        from modes import get_modes
+
+        allowed = get_modes(self.config.hamlib_model)
+        if mode not in allowed:
+            raise RigctldError(
+                -1, f"Invalid mode {mode!r}. Allowed: {', '.join(allowed)}"
+            )
         if self.simulation:
             self.mode = mode
             return
+        # sanitize as defense-in-depth (mode already validated against allowlist above)
+        safe_mode = self._sanitize_rigctld_param(mode)
         # passband 0 means use rig default
-        await self.send_command(rf"+\set_mode {mode} 0")
+        await self.send_command(rf"+\set_mode {safe_mode} 0")
         self.mode = mode
 
     async def set_ptt(self, active: bool) -> None:
@@ -271,11 +310,16 @@ class RadioInstance:
         return vfo
 
     async def set_vfo(self, vfo: str) -> None:
-        """Set active VFO (e.g. 'VFOA', 'VFOB')."""
+        """Set active VFO (e.g. 'VFOA', 'VFOB').
+
+        VFO is already allowlist-validated at the router level; sanitization
+        here is defense-in-depth against protocol injection.
+        """
         if self.simulation:
             self.vfo = vfo
             return
-        await self.send_command(rf"+\set_vfo {vfo}")
+        safe_vfo = self._sanitize_rigctld_param(vfo)
+        await self.send_command(rf"+\set_vfo {safe_vfo}")
         self.vfo = vfo
 
     async def get_swr(self) -> float:
@@ -315,22 +359,25 @@ class RadioInstance:
         await self.send_command(rf"+\set_ctcss_tone {tone_hz}")
         self.ctcss_tone = tone
 
-    async def get_smeter(self) -> tuple[int, int]:
-        """Return S-meter reading as (S-units, dBm).
+    async def get_smeter(self) -> tuple[int, int, int]:
+        """Return S-meter reading as (S-units 0-9, dB_over_s9, raw_dBm).
 
         rigctld returns a float dBm value for STRENGTH.
         S9 = -73 dBm; each S-unit is 6 dB.
+        For readings above S9, s_units=9 and db_over_s9 contains the excess dB.
         """
         if self.simulation:
-            return (5, -73)
+            return (5, 0, -103)
         raw = await self.send_command(r"+\get_level STRENGTH")
         for line in raw.splitlines():
             stripped = line.strip()
             if stripped:
                 try:
                     dbm = float(stripped)
-                    s_units = max(0, min(9, round((dbm + 73) / 6) + 9))
-                    return (s_units, int(dbm))
+                    raw_s = (dbm + 73) / 6 + 9
+                    s_units = max(0, min(9, round(raw_s)))
+                    db_over = max(0, round(dbm + 73)) if dbm > -73 else 0
+                    return (s_units, db_over, int(dbm))
                 except ValueError:
                     pass
         raise RigctldError(-8, f"Cannot parse get_level STRENGTH response: {raw!r}")
@@ -343,7 +390,7 @@ class RadioInstance:
         """Fetch current freq/mode/smeter/vfo (and SWR when PTT) and return changed fields."""
         new_freq = await self.get_freq()
         new_mode = await self.get_mode()
-        new_s, new_dbm = await self.get_smeter()
+        new_s, new_db_over, new_dbm = await self.get_smeter()
         new_vfo = await self.get_vfo()
 
         changed: dict[str, object] = {}
@@ -358,6 +405,7 @@ class RadioInstance:
             self.vfo = new_vfo
         # S-meter included unconditionally (always changes)
         changed["smeter_s"] = new_s
+        changed["smeter_db_over"] = new_db_over
         changed["smeter_dbm"] = new_dbm
 
         # Query SWR only during TX to avoid spurious readings

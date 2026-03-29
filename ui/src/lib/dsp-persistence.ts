@@ -43,10 +43,24 @@ export class DspPersistence {
 		if (this.rxTimer !== null) {
 			clearTimeout(this.rxTimer);
 			this.rxTimer = null;
+			if (Object.keys(this.pendingRx).length > 0) {
+				const patch = this.pendingRx;
+				this.pendingRx = {};
+				patchDspConfig(this.radioId, { rx: patch }).catch((e) => {
+					console.warn('[DSP] Failed to flush RX DSP on destroy:', e);
+				});
+			}
 		}
 		if (this.txTimer !== null) {
 			clearTimeout(this.txTimer);
 			this.txTimer = null;
+			if (Object.keys(this.pendingTx).length > 0) {
+				const patch = this.pendingTx;
+				this.pendingTx = {};
+				patchDspConfig(this.radioId, { tx: patch }).catch((e) => {
+					console.warn('[DSP] Failed to flush TX DSP on destroy:', e);
+				});
+			}
 		}
 	}
 }

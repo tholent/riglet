@@ -78,7 +78,7 @@ Optional client-side companion
 |----------|-----------|
 | All radios always connected | rigctld runs as N permanent daemons. Tabs are independent viewports, not a shared resource. No teardown on tab switch. |
 | No PTT interlock across radios | Simultaneous TX is the operator's responsibility. Antenna/RF planning is out of scope for software. |
-| Single operator model | One WebSocket client per radio at a time. No multi-user concurrency. |
+| Single operator model | One WebSocket client per radio at a time. A new connection forcibly closes the previous one without notification. No multi-user concurrency. This is an intentional simplification, but the displaced client receives no explanation for the disconnection (see Known Limitations). |
 | REST for commands, WebSocket for streams | Freq/mode/PTT changes are REST POSTs. Audio, FFT, and state-push events use WebSocket. PTT via WebSocket is preferred for latency. |
 | Simulation mode | A simulated radio is an explicit radio type in config. It generates fake signals (noise, tones, or mic input) for development and demonstration. An unreachable rigctld is simply an offline/error state -- not silently simulated. |
 | Config-driven startup | Single YAML config. Changes require an explicit restart endpoint. |
@@ -86,6 +86,49 @@ Optional client-side companion
 | Visualization is pluggable | Multiple visualization modes share the same FFT/audio data stream. The UI selects which renderer to use. |
 | Virtual passthrough over integration | Instead of building WSJT-X/fldigi features into Riglet, expose virtual devices so those apps connect natively. |
 | Scroll-wheel everywhere | All dial-type controls respond to scroll-wheel on hover for quick adjustment. |
+
+---
+
+## Security Model
+
+### Current State: No Authentication
+
+Riglet currently has **no authentication or authorization layer**. The entire API surface -- including PTT control, frequency changes, configuration writes, and service restarts -- is accessible to any device on the LAN without credentials.
+
+This is the most significant architectural gap in the system. While Riglet is designed as a LAN-only application on a private network, the threat surface is real:
+
+- Any device on the network can key the transmitter (FCC regulatory implications for unauthorized transmission)
+- Configuration can be overwritten or corrupted by any LAN client
+- Service restarts can be triggered arbitrarily, disrupting active operation
+
+The `itsdangerous` package is listed as a dependency but never used, indicating authentication was planned but not implemented.
+
+### Planned Approach
+
+Authentication should be lightweight and appropriate for the single-operator, LAN-only deployment model. A token-based approach using `itsdangerous` (already a dependency) is the natural fit:
+
+- A shared secret / API token generated at first boot or during setup
+- Token required in an `Authorization` header or as a WebSocket query parameter
+- No user accounts, roles, or complex RBAC -- this is a single-operator system
+- The setup wizard should be accessible without auth on first boot (when no config exists), then require auth for subsequent access
+
+### Input Validation Gaps
+
+Several user-supplied values are passed through to system interfaces without adequate validation:
+
+1. **rigctld command injection**: Mode strings from the API are interpolated directly into rigctld protocol commands. The rigctld protocol is newline-delimited, so a mode value containing `\n` could inject additional commands (e.g., activating PTT). Mode strings must be validated against the radio's known mode list before being sent to rigctld.
+
+2. **Radio ID format**: Radio IDs are used in filesystem paths (env file writes) and systemd unit names without format validation. A crafted ID containing path traversal characters (e.g., `../../tmp/evil`) could write files to arbitrary locations. The `RadioConfig.id` field needs a Pydantic validator restricting it to safe characters (e.g., `^[a-z0-9_-]+$`).
+
+3. **Env file content injection**: Config values like `serial_port` are written directly into systemd environment files. Values containing newlines could inject additional environment variables. String format validation is needed on all config fields that are written to env files.
+
+4. **Audio device names**: Audio source/sink names from config are passed as subprocess arguments to `pw-record` and `pw-play`. While `create_subprocess_exec` prevents shell injection, the values should still be validated against known device names.
+
+5. **Frequency bounds**: The `set_freq` endpoint accepts any float value without consulting the band plan data that exists in `bandplan.py`. Negative values, zero, or out-of-band frequencies are passed through to the radio.
+
+### Deployment Hardening Notes
+
+The deployment script (`deployment/scripts/01-configure.sh`) explicitly enables SSH password authentication. For an embedded device on a home network, key-based-only authentication would be more appropriate. This is a deployment configuration issue, not a code issue, but it affects the overall security posture.
 
 ---
 
@@ -678,6 +721,13 @@ On page load:
 | DSP config save storms during rapid adjustment | Medium | Client-side debounce (500ms) coalesces rapid parameter changes into a single save. The UI remains responsive because audio changes are instant (Web Audio node updates) while persistence is async. |
 | Popover positioning on small screens | Medium | Use a utility like Floating UI (Popper successor) or manual viewport-aware positioning. Fall back to a bottom sheet on narrow screens. |
 | Per-radio DSP config bloats config.yaml | Low | DSP config adds ~40 lines per radio. For 1-3 radios this is negligible. The YAML remains human-readable. |
+| Unauthorized transmitter keying over LAN | High | Add token-based authentication before any production deployment. See Security Model section. |
+| rigctld command injection via mode strings | High | Validate all user-supplied strings (mode, VFO) against known allowlists before interpolating into rigctld protocol commands. |
+| Concurrent config mutation (lost updates) | Medium | Config read-modify-write cycles across multiple endpoints have no locking. Add an `asyncio.Lock` around config mutation paths. |
+| Single SSE subscriber starves others | Medium | The device event queue is single-consumer. Multiple SSE clients (e.g., two browser tabs on the setup wizard) cause event loss. Replace with a broadcast pattern (one queue per subscriber). |
+| Float precision in frequency conversion | Low | `int(mhz * 1_000_000)` truncates rather than rounds, causing off-by-one Hz errors (e.g., 14.074 MHz becomes 14073999 Hz). Use `round()` before `int()`. |
+| Waterfall subprocess leak on connection displacement | Medium | When a new waterfall WebSocket displaces the previous one, the old `pw-record` subprocess is not terminated. It runs orphaned until it fails on its own. |
+| DSP changes dropped on page navigation | Medium | `DspPersistence.destroy()` clears pending debounced saves instead of flushing them. Operators who adjust a knob and immediately navigate lose changes. |
 
 ---
 
@@ -686,7 +736,7 @@ On page load:
 | # | Topic | Decision |
 |---|-------|----------|
 | 1 | Frontend framework | **Svelte** -- lightweight, no virtual DOM, well-suited for real-time canvas/WebSocket work |
-| 2 | FFT computation | **Dedicated asyncio daemon thread per radio** -- each thread owns its PipeWire capture stream, runs numpy.fft, and feeds results into an `asyncio.Queue`; the WebSocket handler drains the queue and pushes JSON frames |
+| 2 | FFT computation | **Subprocess-based PipeWire capture** -- each radio spawns a `pw-record` subprocess; the waterfall router reads its stdout asynchronously and computes FFT server-side. This is a pragmatic simplification from the originally planned dedicated-thread model, trading architectural purity for implementation simplicity. |
 | 3 | rigctld polling interval | **100ms default**, configurable via `polling_interval_ms` in `config.yaml`; do not poll below ~50ms to avoid overwhelming radio CAT buffers |
 | 4 | Static file serving | **FastAPI StaticFiles** to start (one-line, zero extra deps); Caddy can be added later as a layer in the rpi-image build to enable HTTPS/HTTP2 without code changes |
 | 5 | Config conflict error format | **RFC 7807 Problem Details** with `409 Conflict`; `errors` array identifies each conflict by type, field path, conflicting radio ID, and value |
@@ -706,3 +756,41 @@ Config is modelled as **Pydantic models** -- FastAPI already depends on Pydantic
 - Cross-radio uniqueness checks (duplicate serial ports, duplicate audio devices) via `@model_validator`
 - Single source of truth: same models validate the YAML on disk and the API request body
 - Pydantic `ValidationError` structure maps directly onto the RFC 7807 `errors` array format
+
+**Validation gap**: The `RadioConfig.id` field currently accepts any string. It needs a `field_validator` constraining it to safe characters (e.g., `^[a-z0-9_-]+$`) because the ID is used in filesystem paths and systemd unit names. Similarly, `serial_port` and other string fields written to env files need format validation to prevent newline injection.
+
+---
+
+## Known Limitations and Technical Debt
+
+Issues identified by audit (2026-03-29) that are understood and tracked for resolution.
+
+### Correctness
+
+- **S-meter over-S9 loss**: The S-meter conversion formula (`state.py`) clamps values to S0-S9, discarding all "over S9" information. Readings above S9 (e.g., S9+20dB) are reported as plain S9. The UI needs the raw dBm value to display above-S9 readings correctly.
+
+- **Float-to-Hz truncation**: `int(mhz * 1_000_000)` truncates instead of rounding, causing off-by-one Hz errors on certain frequencies (e.g., 14.074 MHz becomes 14073999 Hz due to IEEE 754 representation). Fix: `round(mhz * 1_000_000)`.
+
+- **Control WS state ordering**: The poll loop and the immediate-echo after set commands can race, potentially delivering out-of-order state updates if a poll runs between a set command and its echo response.
+
+### Resource Management
+
+- **Waterfall subprocess leak**: When a new waterfall WebSocket connection displaces the previous one, the old `pw-record` subprocess continues running orphaned. Unlike the control and audio WebSocket handlers (which explicitly close the previous connection), the waterfall handler simply overwrites `radio.ws_waterfall` without terminating the old capture process.
+
+- **Single-consumer SSE queue**: The device event SSE stream uses a single `asyncio.Queue`. Multiple subscribers (e.g., two browser tabs on the setup wizard) steal events from each other. The setup wizard's SSE handler is also a no-op that dequeues events without processing them, further exacerbating the problem.
+
+- **Config mutation race condition**: Multiple endpoints (`POST /config`, `PATCH /radios/{id}/dsp`, `POST /presets`, etc.) perform read-modify-write on `app.state.config` without any locking. Concurrent requests can cause lost updates. An `asyncio.Lock` is needed around config mutation paths.
+
+- **DSP persistence drops changes on navigation**: `DspPersistence.destroy()` clears pending debounced saves rather than flushing them. Adjusting a DSP knob and immediately navigating away silently loses the change.
+
+### Code Quality
+
+- **Unused `itsdangerous` dependency**: Listed in `pyproject.toml` but never imported. Should be either removed or used to implement authentication.
+
+- **Duplicate `RadioDep` type alias**: Defined in both `deps.py` (canonical) and `audio.py` (local copy). The local copy could silently diverge.
+
+- **RX DSP config application duplication**: The code that applies RX DSP settings from config to the chain is copy-pasted between the simulation branch and the real-radio branch in `+page.svelte`.
+
+- **Dead code**: `_MONITOR_START` in `devices.py` is computed at import time but never referenced. The `rx-float` message handler in the audio worklet message handler is never triggered.
+
+- **`image/` vs `deployment/` directory**: CLAUDE.md references `image/` but the actual directory is `deployment/`. Documentation should be updated to match.

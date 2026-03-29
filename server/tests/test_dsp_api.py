@@ -60,6 +60,7 @@ async def _setup(config: RigletConfig) -> RadioManager:
     app.state.config = config
     app.state.manager = manager
     app.state.device_events = asyncio.Queue()
+    app.state.config_lock = asyncio.Lock()
     return manager
 
 

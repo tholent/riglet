@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import contextlib
 import os
+import re
 import tempfile
 from pathlib import Path
 from typing import Literal
@@ -193,6 +194,29 @@ class RadioConfig(BaseModel):
     bands: list[str] = []
     rx_dsp: RxDspConfig = RxDspConfig()
     tx_dsp: TxDspConfig = TxDspConfig()
+
+    @field_validator("id")
+    @classmethod
+    def id_must_be_safe(cls, v: str) -> str:
+        """Constrain radio ID to prevent path traversal and systemd unit name injection."""
+        if not re.fullmatch(r"[a-z0-9][a-z0-9_-]{0,62}", v):
+            raise ValueError(
+                "Radio ID must be 1-63 chars, start with alphanumeric, "
+                "and contain only lowercase letters, digits, hyphens, and underscores"
+            )
+        return v
+
+    @field_validator("audio_source", "audio_sink")
+    @classmethod
+    def audio_device_must_be_safe(cls, v: str) -> str:
+        """Reject suspicious audio device names that could abuse subprocess arguments."""
+        if not v:
+            return v  # empty means "not configured" — allowed
+        if len(v) > 256:
+            raise ValueError("Audio device name too long (max 256 chars)")
+        if re.search(r"[\x00-\x1f\x7f;|&`$]", v):
+            raise ValueError(f"Audio device name contains invalid characters: {v!r}")
+        return v
 
     @field_validator("polling_interval_ms")
     @classmethod

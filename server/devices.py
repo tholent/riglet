@@ -8,7 +8,6 @@ import logging
 import re
 import subprocess
 import threading
-import time
 from dataclasses import dataclass
 from typing import Literal
 
@@ -182,18 +181,47 @@ def discover_audio_devices() -> list[AudioDevice]:
 # ---------------------------------------------------------------------------
 
 
+class DeviceEventBroadcaster:
+    """Fan-out device events to multiple SSE subscribers.
+
+    Each call to ``subscribe()`` returns a private queue that receives every
+    event published via ``publish()``.  Slow consumers have events silently
+    dropped (QueueFull) rather than blocking the publisher.
+    """
+
+    def __init__(self) -> None:
+        self._subscribers: list[asyncio.Queue[DeviceEvent]] = []
+
+    def subscribe(self) -> asyncio.Queue[DeviceEvent]:
+        """Create and register a per-client queue.  Caller must unsubscribe."""
+        q: asyncio.Queue[DeviceEvent] = asyncio.Queue(maxsize=64)
+        self._subscribers.append(q)
+        return q
+
+    def unsubscribe(self, q: asyncio.Queue[DeviceEvent]) -> None:
+        """Remove a per-client queue.  Safe to call even if already removed."""
+        with contextlib.suppress(ValueError):
+            self._subscribers.remove(q)
+
+    async def publish(self, event: DeviceEvent) -> None:
+        """Deliver *event* to all current subscribers (fire-and-forget per client)."""
+        for q in self._subscribers:
+            with contextlib.suppress(asyncio.QueueFull):
+                q.put_nowait(event)
+
+
 class UdevMonitor:
     """Background thread that polls /sys/bus/usb/devices for hotplug events.
 
-    On each add/remove pushes a DeviceEvent to the provided asyncio.Queue.
+    On each add/remove pushes a DeviceEvent to the broadcaster.
     Full pyudev integration is a future enhancement; this is a simple
     polling fallback sufficient for development.
     """
 
     _POLL_INTERVAL = 2.0
 
-    def __init__(self, queue: asyncio.Queue[DeviceEvent]) -> None:
-        self._queue = queue
+    def __init__(self, broadcaster: DeviceEventBroadcaster) -> None:
+        self._broadcaster = broadcaster
         self._loop: asyncio.AbstractEventLoop | None = None
         self._thread: threading.Thread | None = None
         self._stop_event = threading.Event()
@@ -249,7 +277,9 @@ class UdevMonitor:
             details={"device": device_name},
         )
         if self._loop is not None:
-            self._loop.call_soon_threadsafe(self._queue.put_nowait, event)
+            asyncio.run_coroutine_threadsafe(
+                self._broadcaster.publish(event), self._loop
+            )
 
     # Allow use as a plain context manager in tests (synchronous)
     def __enter__(self) -> UdevMonitor:
@@ -260,7 +290,3 @@ class UdevMonitor:
         if self._thread is not None:
             self._thread.join(timeout=self._POLL_INTERVAL + 1.0)
             self._thread = None
-
-
-# Keep a sentinel so that start time is anchored
-_MONITOR_START = time.monotonic()

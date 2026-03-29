@@ -13,7 +13,12 @@ from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 from sse_starlette.sse import EventSourceResponse
 
-from devices import DeviceEvent, discover_audio_devices, discover_serial_devices
+from devices import (
+    DeviceEvent,
+    DeviceEventBroadcaster,
+    discover_audio_devices,
+    discover_serial_devices,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -49,25 +54,29 @@ async def get_audio_devices() -> JSONResponse:
 
 @router.get("/devices/events")
 async def get_device_events(request: Request) -> EventSourceResponse:
-    queue: asyncio.Queue[DeviceEvent] = request.app.state.device_events
+    broadcaster: DeviceEventBroadcaster = request.app.state.device_broadcaster
+    queue: asyncio.Queue[DeviceEvent] = broadcaster.subscribe()
 
     async def event_generator() -> AsyncGenerator[dict[str, Any], None]:
-        while True:
-            if await request.is_disconnected():
-                break
-            try:
-                event = await asyncio.wait_for(queue.get(), timeout=1.0)
-                yield {
-                    "event": event.action,
-                    "data": json.dumps(
-                        {
-                            "device_type": event.device_type,
-                            "details": event.details,
-                        }
-                    ),
-                }
-            except TimeoutError:
-                # Send a keepalive comment so the client stays connected
-                yield {"comment": "keepalive"}
+        try:
+            while True:
+                if await request.is_disconnected():
+                    break
+                try:
+                    event = await asyncio.wait_for(queue.get(), timeout=1.0)
+                    yield {
+                        "event": event.action,
+                        "data": json.dumps(
+                            {
+                                "device_type": event.device_type,
+                                "details": event.details,
+                            }
+                        ),
+                    }
+                except TimeoutError:
+                    # Send a keepalive comment so the client stays connected
+                    yield {"comment": "keepalive"}
+        finally:
+            broadcaster.unsubscribe(queue)
 
     return EventSourceResponse(event_generator())

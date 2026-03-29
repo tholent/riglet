@@ -91,6 +91,7 @@ async def test_status_empty_manager_returns_setup_required(
     app.state.config = empty_config
     app.state.manager = manager
     app.state.device_events = asyncio.Queue()
+    app.state.config_lock = asyncio.Lock()
 
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app),
@@ -117,6 +118,7 @@ async def test_status_with_radios_no_setup_required(
     app.state.config = one_radio_config
     app.state.manager = manager
     app.state.device_events = asyncio.Queue()
+    app.state.config_lock = asyncio.Lock()
 
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app),
@@ -148,6 +150,7 @@ async def test_get_config_returns_current_config(
     app.state.config = empty_config
     app.state.manager = manager
     app.state.device_events = asyncio.Queue()
+    app.state.config_lock = asyncio.Lock()
 
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app),
@@ -180,6 +183,7 @@ async def test_post_config_valid_saves_and_returns(
     app.state.config = empty_config
     app.state.manager = manager
     app.state.device_events = asyncio.Queue()
+    app.state.config_lock = asyncio.Lock()
 
     new_config = make_config(
         [
@@ -230,6 +234,7 @@ async def test_post_config_duplicate_serial_port_returns_409(
     app.state.config = empty_config
     app.state.manager = manager
     app.state.device_events = asyncio.Queue()
+    app.state.config_lock = asyncio.Lock()
 
     # Two enabled radios sharing a serial port
     r1 = make_radio(radio_id="r1", serial_port="/dev/ttyUSB0", rigctld_port=4532)

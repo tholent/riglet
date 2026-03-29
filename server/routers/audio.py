@@ -5,15 +5,13 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
-from typing import Annotated
 
 import numpy as np
-from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
-from deps import get_radio
-from state import RadioInstance
+from deps import RadioDep
 
 logger = logging.getLogger(__name__)
 
@@ -38,13 +36,6 @@ class VolumeRequest(BaseModel):
     rx_volume: int = Field(ge=0, le=100)
     tx_gain: int = Field(ge=0, le=100)
     nr_level: int = Field(ge=0, le=10)
-
-
-# ---------------------------------------------------------------------------
-# Dependency alias
-# ---------------------------------------------------------------------------
-
-RadioDep = Annotated[RadioInstance, Depends(get_radio)]
 
 
 # ---------------------------------------------------------------------------

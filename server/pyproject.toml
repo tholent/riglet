@@ -10,7 +10,6 @@ dependencies = [
     "numpy",
     "pyserial",
     "sse-starlette",
-    "itsdangerous",
 ]
 
 [dependency-groups]

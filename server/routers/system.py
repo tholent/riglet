@@ -28,6 +28,12 @@ _hamlib_models_cache: list[dict[str, Any]] | None = None
 # ---------------------------------------------------------------------------
 
 
+def _sanitize_env_value(value: str | int) -> str:
+    """Remove characters that could inject additional env file lines."""
+    s = str(value)
+    return s.replace("\n", "").replace("\r", "").replace("\x00", "")
+
+
 def write_env_files(config: RigletConfig) -> None:
     """Write /etc/riglet/radio-{id}.env for each enabled radio; remove for disabled."""
     env_dir = Path("/etc/riglet")
@@ -41,11 +47,11 @@ def write_env_files(config: RigletConfig) -> None:
         if radio.enabled:
             try:
                 env_path.write_text(
-                    f"HAMLIB_MODEL={radio.hamlib_model}\n"
-                    f"SERIAL_PORT={radio.serial_port}\n"
-                    f"BAUD_RATE={radio.baud_rate}\n"
-                    f"RIGCTLD_PORT={radio.rigctld_port}\n"
-                    f"PTT_METHOD={radio.ptt_method}\n",
+                    f"HAMLIB_MODEL={_sanitize_env_value(radio.hamlib_model)}\n"
+                    f"SERIAL_PORT={_sanitize_env_value(radio.serial_port)}\n"
+                    f"BAUD_RATE={_sanitize_env_value(radio.baud_rate)}\n"
+                    f"RIGCTLD_PORT={_sanitize_env_value(radio.rigctld_port)}\n"
+                    f"PTT_METHOD={_sanitize_env_value(radio.ptt_method)}\n",
                     encoding="utf-8",
                 )
                 logger.info("Wrote env file %s", env_path)
@@ -137,8 +143,9 @@ async def post_config(request: Request) -> JSONResponse:
                 "errors": errors,
             },
         )
-    save_config(config)
-    request.app.state.config = config
+    async with request.app.state.config_lock:
+        save_config(config)
+        request.app.state.config = config
     return JSONResponse(content=config.model_dump(mode="json"))
 
 

@@ -4,6 +4,11 @@
 
 ## Feature: v0.3.0 -- Per-Radio DSP Chains
 
+**Status: COMPLETE** -- All 28 tasks finished.
+
+<details>
+<summary>Expand completed DSP plan (all tasks [x])</summary>
+
 ### Task Summary
 
 | #  | Task                                                              | Priority | Agent      | Status | Depends On | Notes                                           |
@@ -37,744 +42,716 @@
 | 27 | Frontend: unit tests for RxDspChain node wiring                  | P0       | @developer | [x]    | 10         | Vitest, mock AudioContext                       |
 | 28 | Frontend: unit tests for TxDspChain node wiring                  | P0       | @developer | [x]    | 16         | Vitest, mock AudioContext                       |
 
+</details>
+
+---
+
+## Feature: v0.4.0 -- Security Hardening and Audit Remediations
+
+Source: `/Users/wells/Projects/riglet/analysis/full_audit_20260329.md`
+
+This feature addresses all Critical (C1-C3), High (H1-H4), and Medium (M1-M8) findings from the 2026-03-29 codebase audit. Low findings (L1-L8) are included where they have security implications or are trivially co-located with other fixes.
+
+### Task Summary
+
+| #  | Task                                                                          | Priority | Agent      | Status | Depends On | Notes                                                        |
+|:---|:------------------------------------------------------------------------------|:---------|:-----------|:-------|:-----------|:-------------------------------------------------------------|
+| 01 | Validate radio ID format in Pydantic model                                    | P0       | @developer | [x]    | --         | Fixes M1, M2, M3                                            |
+| 02 | Validate mode strings against Hamlib mode list                                | P0       | @developer | [x]    | --         | Fixes C2 (mode injection)                                   |
+| 03 | Sanitize all rigctld command string inputs                                    | P0       | @developer | [x]    | 02         | Fixes C2 (general injection)                                |
+| 04 | Validate audio device names in config model                                   | P0       | @developer | [x]    | 01         | Fixes C3                                                    |
+| 05 | Add asyncio.Lock for config mutations                                         | P0       | @developer | [x]    | --         | Fixes H4; main.py+dsp.py+system.py already done            |
+| 06 | Fix float-to-Hz frequency conversion precision                                | P1       | @developer | [x]    | --         | Fixes L6                                                    |
+| 07 | Fix S-meter calculation for over-S9 readings                                  | P1       | @developer | [x]    | --         | Fixes H2                                                    |
+| 08 | Replace single SSE queue with broadcast pattern                               | P0       | @developer | [x]    | --         | Fixes H1                                                    |
+| 09 | Fix setup wizard SSE no-op handler                                            | P1       | @developer | [x]    | 08         | Fixes M8                                                    |
+| 10 | Close displaced waterfall WebSocket and kill orphaned subprocess              | P1       | @developer | [x]    | --         | Fixes M5                                                    |
+| 11 | Flush pending DSP changes on DspPersistence.destroy()                         | P1       | @developer | [x]    | --         | Fixes M4                                                    |
+| 12 | Token-based authentication: backend middleware and token management           | P0       | @developer | [ ]    | --         | SKIPPED per instructions                                    |
+| 13 | Token-based authentication: frontend token handling                           | P0       | @developer | [ ]    | 12         | SKIPPED per instructions                                    |
+| 14 | Remove duplicate RadioDep from audio.py                                       | P2       | @developer | [x]    | --         | Fixes L1                                                    |
+| 15 | Extract DRY helper for RX DSP config application in +page.svelte             | P2       | @developer | [x]    | --         | Fixes L2                                                    |
+| 16 | Remove dead code: _MONITOR_START and unused rx-float handler                 | P2       | @developer | [~]    | --         | Fixes L3, L7                                                |
+| 17 | Remove or use itsdangerous dependency                                         | P1       | @developer | [~]    | 12         | Fixes M7; removing since auth skipped                       |
+| 18 | Frequency bounds validation against band plan                                 | P2       | @developer | [x]    | --         | Fixes L5                                                    |
+| 19 | Sanitize env file content (escape newlines in values)                         | P1       | @developer | [~]    | 01         | Fixes M2 (defense in depth alongside radio ID validation)   |
+| 20 | Backend tests for new input validation and auth                               | P0       | @tester    | [~]    | 01-05, 12  | Tests for all Critical/High fixes (skipping auth tests)     |
+| 21 | Frontend tests for auth token flow                                            | P1       | @tester    | [ ]    | 13         | SKIPPED per instructions                                    |
+
 ---
 
 ### Parallelization Strategy
 
 **Wave 1** (no dependencies, all independent):
-- Task 01: Backend config schema
-- Tasks 03-09: All individual RxDspChain filter nodes (can be developed independently as each is a self-contained node)
-- Task 11: TxDspChain base class with highpass + lowpass
+- Task 01: Radio ID validation
+- Task 02: Mode string validation
+- Task 05: Config mutation lock
+- Task 06: Frequency precision fix
+- Task 07: S-meter fix
+- Task 08: SSE broadcast pattern
+- Task 10: Waterfall WS cleanup
+- Task 11: DspPersistence flush
+- Task 12: Auth backend middleware
+- Task 14: Remove duplicate RadioDep
+- Task 15: DRY DSP config application
+- Task 16: Remove dead code
+- Task 18: Frequency bounds validation
 
 **Wave 2** (depends on Wave 1 outputs):
-- Task 02: DSP config API (depends on 01)
-- Task 10: Wire RxDspChain into AudioManager (depends on 03-09)
-- Tasks 12-15: TxDspChain additional stages (depend on 11)
-- Task 25: Backend schema tests (depends on 01)
+- Task 03: Rigctld command sanitization (depends on 02)
+- Task 04: Audio device name validation (depends on 01)
+- Task 09: Fix wizard SSE handler (depends on 08)
+- Task 13: Auth frontend handling (depends on 12)
+- Task 17: itsdangerous dependency decision (depends on 12)
+- Task 19: Env file content sanitization (depends on 01)
 
-**Wave 3** (depends on Wave 2):
-- Task 16: Wire TxDspChain into AudioManager (depends on 11-15)
-- Task 17: RxDspPillRow component (depends on 10)
-- Task 19: TxDspPanel component (depends on 16)
-- Task 26: Backend API integration tests (depends on 02)
-- Task 27: RxDspChain unit tests (depends on 10)
-
-**Wave 4** (depends on Wave 3):
-- Task 18: RxDspPopover component (depends on 17)
-- Task 20: TxDspMenu component (depends on 19)
-- Task 28: TxDspChain unit tests (depends on 16)
-
-**Wave 5** (integration, depends on Wave 4):
-- Task 21: Integrate RxDspPillRow into main page (depends on 17, 18)
-- Task 22: Integrate TxDspPanel into PTT area (depends on 19, 20)
-- Task 23: Load DSP config from backend on connect (depends on 02, 10, 16)
-
-**Wave 6** (final, depends on Wave 5):
-- Task 24: Debounced save DSP config on change (depends on 02, 23)
+**Wave 3** (integration and testing):
+- Task 20: Backend tests (depends on 01-05, 12)
+- Task 21: Frontend auth tests (depends on 13)
 
 ---
 
 ### Task Descriptions
 
-#### Task 01: Config schema -- add RxDspConfig and TxDspConfig Pydantic models
+#### Task 01: Validate radio ID format in Pydantic model
 
+**Audit refs:** M1 (path traversal in env file), M3 (systemd unit name injection)
 **File:** `server/config.py`
 
-Add two new Pydantic v2 `BaseModel` subclasses and nest them as optional fields on `RadioConfig`.
-
-**RxDspConfig fields:**
-- `highpass_enabled: bool = False`
-- `highpass_freq: int = 100` (range 50-500 Hz, field_validator)
-- `lowpass_enabled: bool = False`
-- `lowpass_freq: int = 3000` (range 1500-5000 Hz, field_validator)
-- `peak_enabled: bool = False`
-- `peak_freq: int = 1000` (range 200-4000 Hz)
-- `peak_gain: float = 0.0` (range -20.0 to +20.0 dB)
-- `peak_q: float = 1.0` (range 0.1-30.0)
-- `noise_blanker_enabled: bool = False`
-- `noise_blanker_freq: int = 50` (literal 50 or 60)
-- `notch_enabled: bool = False`
-- `notch_mode: Literal["manual", "auto"] = "manual"`
-- `notch_freq: int = 1000` (range 100-5000 Hz)
-- `notch_q: float = 10.0` (range 1.0-50.0)
-- `bandpass_enabled: bool = False`
-- `bandpass_preset: Literal["voice", "cw", "manual"] = "voice"`
-- `bandpass_center: int = 1500` (Hz)
-- `bandpass_width: int = 2400` (Hz)
-- `nr_enabled: bool = False`
-- `nr_amount: float = 0.5` (range 0.0-1.0)
-
-**TxDspConfig fields:**
-- `highpass_enabled: bool = False`
-- `highpass_freq: int = 100` (range 50-500 Hz)
-- `lowpass_enabled: bool = False`
-- `lowpass_freq: int = 3000` (range 1500-5000 Hz)
-- `eq_enabled: bool = False`
-- `eq_bass_gain: float = 0.0` (dB, -20 to +20)
-- `eq_mid_gain: float = 0.0` (dB, -20 to +20)
-- `eq_treble_gain: float = 0.0` (dB, -20 to +20)
-- `compressor_enabled: bool = False`
-- `compressor_preset: Literal["off", "light", "medium", "heavy", "manual"] = "off"`
-- `compressor_threshold: float = -24.0` (dBFS)
-- `compressor_ratio: float = 4.0`
-- `compressor_attack: float = 0.003` (seconds)
-- `compressor_release: float = 0.25` (seconds)
-- `limiter_enabled: bool = False`
-- `limiter_threshold: float = -3.0` (dBFS)
-- `gate_enabled: bool = False`
-- `gate_threshold: float = -60.0` (dBFS, range -100 to 0)
-
-**Nest on RadioConfig:**
-```python
-rx_dsp: RxDspConfig = RxDspConfig()
-tx_dsp: TxDspConfig = TxDspConfig()
-```
-
-Both default to all-disabled so existing configs are backward-compatible.
-
-**Acceptance criteria:**
-- `load_config` / `save_config` round-trip with DSP fields present and absent
-- Validators reject out-of-range values with clear error messages
-- Existing `RadioConfig` tests still pass
-
----
-
-#### Task 02: DSP config API -- GET/PATCH per-radio DSP settings endpoint
-
-**File:** `server/routers/dsp.py` (new file)
-
-Create a new APIRouter mounted in `main.py` at the `/api` prefix.
-
-**Endpoints:**
-
-`GET /api/radios/{radio_id}/dsp`
-- Returns `{"rx": <RxDspConfig dict>, "tx": <TxDspConfig dict>}`
-- Uses `get_radio` dependency (404 if radio not found)
-- Reads from the live config (`manager.config.radios[radio_id]`)
-
-`PATCH /api/radios/{radio_id}/dsp`
-- Request body: `{"rx": {<partial RxDspConfig fields>}, "tx": {<partial TxDspConfig fields>}}`
-- Both `rx` and `tx` keys are optional; missing keys mean "no change"
-- Merges partial updates onto existing config using `model_copy(update=...)`
-- Validates merged result (Pydantic validators run on copy)
-- Persists to disk via `save_config`
-- Returns the updated full DSP config (same shape as GET)
-- 409 on validation errors (RFC 7807 format, consistent with existing pattern)
-
-**Wire into main.py:**
-- Import `dsp_router` from `routers.dsp`
-- `app.include_router(dsp_router, prefix="/api")`
-
-**Acceptance criteria:**
-- GET returns defaults for a radio with no DSP config
-- PATCH with partial RX updates does not reset TX config
-- PATCH with invalid values returns 409 with problem details
-- Config file on disk reflects changes after PATCH
-
----
-
-#### Task 03: RxDspChain -- highpass filter node (100-300 Hz)
-
-**File:** `ui/src/lib/audio/rx-dsp-chain.ts` (new file)
-
-Create a new `RxDspChain` class that will replace the existing `DspChain`. This task creates the class skeleton and the first filter node.
-
-**Class structure:**
-```typescript
-export class RxDspChain {
-    private ctx: AudioContext;
-    // Node declarations
-    private highpassNode: BiquadFilterNode | null = null;
-    // ... (other nodes added in tasks 04-09)
-
-    get input(): AudioNode { ... }  // first node in chain
-    get output(): AudioNode { ... } // last node in chain
-
-    async build(): Promise<void> { ... }
-    destroy(): void { ... }
-}
-```
-
-**Highpass node:**
-- `BiquadFilterNode` with `type = 'highpass'`
-- Default frequency: 100 Hz
-- Bypassed by default: frequency set to 1 Hz (below audible range)
-- `setHighpass(freqHz: number)`: set cutoff frequency (clamped 50-500)
-- `enableHighpass(enabled: boolean)`: toggle; when disabled, freq = 1 Hz
-- `isHighpassEnabled(): boolean`
-
-**Acceptance criteria:**
-- Class instantiates with an AudioContext
-- `build()` creates the highpass BiquadFilterNode
-- Enable/disable toggles the effective cutoff
-
----
-
-#### Task 04: RxDspChain -- lowpass filter node (2.5-3.5 kHz)
-
-**File:** `ui/src/lib/audio/rx-dsp-chain.ts`
-
-Add lowpass filter node to `RxDspChain`.
-
-**Lowpass node:**
-- `BiquadFilterNode` with `type = 'lowpass'`
-- Default frequency: 3000 Hz
-- Bypassed by default: frequency set to `ctx.sampleRate / 2` (Nyquist)
-- `setLowpass(freqHz: number)`: set cutoff (clamped 1500-5000)
-- `enableLowpass(enabled: boolean)`: toggle; when disabled, freq = Nyquist
-- `isLowpassEnabled(): boolean`
-
-Wire into chain: highpass -> lowpass -> (rest of chain)
-
----
-
-#### Task 05: RxDspChain -- peak filter node
-
-**File:** `ui/src/lib/audio/rx-dsp-chain.ts`
-
-Add peak (parametric EQ) filter node to `RxDspChain`.
-
-**Peak node:**
-- `BiquadFilterNode` with `type = 'peaking'`
-- Default: freq 1000 Hz, gain 0 dB, Q 1.0
-- Bypassed by default: gain = 0 dB (transparent)
-- `setPeak(freqHz: number, gainDb: number, q: number)`: set all params
-- `enablePeak(enabled: boolean)`: toggle; when disabled, gain = 0
-- `isPeakEnabled(): boolean`
-
-Wire into chain: highpass -> lowpass -> peak -> (rest)
-
----
-
-#### Task 06: RxDspChain -- noise blanker node (biquad notch at 50/60 Hz)
-
-**File:** `ui/src/lib/audio/rx-dsp-chain.ts`
-
-Add a power-line noise blanker to `RxDspChain`.
-
-**Noise blanker node:**
-- `BiquadFilterNode` with `type = 'notch'`
-- Default frequency: 50 Hz, Q = 30 (narrow notch)
-- Bypassed by default: Q = 0.01 (effectively transparent)
-- `setNoiseBlankerFreq(freq: 50 | 60)`: switch between 50 Hz and 60 Hz mains hum
-- `enableNoiseBlanker(enabled: boolean)`: toggle; when disabled, Q = 0.01
-- `isNoiseBlankerEnabled(): boolean`
-
-Wire into chain: highpass -> lowpass -> peak -> noiseBlanker -> (rest)
-
----
-
-#### Task 07: RxDspChain -- notch filter node (auto/manual)
-
-**File:** `ui/src/lib/audio/rx-dsp-chain.ts`
-
-Add a notch filter with manual and auto modes to `RxDspChain`.
-
-**Notch node:**
-- `BiquadFilterNode` with `type = 'notch'`
-- Manual mode: operator sets center frequency and Q
-- Auto mode: placeholder for future tone detection (for now, defaults to 1000 Hz; auto-detect logic is out of scope for this task -- set a TODO comment)
-- Default: freq 1000 Hz, Q = 10
-- Bypassed by default: Q = 0.01
-- `setNotch(centerHz: number, q: number)`: manual params
-- `setNotchMode(mode: 'manual' | 'auto')`: store mode flag
-- `enableNotch(enabled: boolean)`: toggle; when disabled, Q = 0.01
-- `isNotchEnabled(): boolean`
-- `getNotchMode(): 'manual' | 'auto'`
-
-Wire into chain: highpass -> lowpass -> peak -> noiseBlanker -> notch -> (rest)
-
----
-
-#### Task 08: RxDspChain -- bandpass filter (presets + manual range)
-
-**File:** `ui/src/lib/audio/rx-dsp-chain.ts`
-
-Add a bandpass filter with presets to `RxDspChain`.
-
-**Bandpass node:**
-- `BiquadFilterNode` with `type = 'bandpass'`
-- Presets:
-  - `"voice"`: center 1500 Hz, width 2400 Hz (Q = 1500/2400 = 0.625)
-  - `"cw"`: center 700 Hz, width 500 Hz (Q = 1.4)
-  - `"manual"`: operator-specified center and width
-- Default: voice preset
-- Bypassed by default: Q = 0.01 (wide open)
-- `setBandpassPreset(preset: 'voice' | 'cw' | 'manual')`: apply preset center/width
-- `setBandpass(centerHz: number, widthHz: number)`: manual params (also sets preset to 'manual')
-- `enableBandpass(enabled: boolean)`: toggle; when disabled, Q = 0.01
-- `isBandpassEnabled(): boolean`
-- `getBandpassPreset(): string`
-
-Wire into chain: highpass -> lowpass -> peak -> noiseBlanker -> notch -> bandpass -> (rest)
-
----
-
-#### Task 09: RxDspChain -- DSP noise reduction AudioWorklet
-
-**File:** `ui/src/lib/audio/rx-dsp-chain.ts` (node integration) and `ui/static/nr-worklet.js` (already exists, verify compatibility)
-
-Add NR AudioWorklet node to `RxDspChain`.
-
-**NR node:**
-- Reuse existing `nr-worklet.js` processor (spectral subtraction)
-- Load via `ctx.audioWorklet.addModule('/nr-worklet.js')` (best-effort, graceful fallback if unavailable)
-- `setNrAmount(amount: number)`: 0.0-1.0 via AudioParam `'amount'`
-- `enableNr(enabled: boolean)`: via AudioParam `'enabled'` (0/1)
-- `isNrEnabled(): boolean`
-- `isNrAvailable(): boolean`
-- If worklet fails to load, skip NR node in chain wiring (connect previous node directly to next)
-
-Wire into chain: highpass -> lowpass -> peak -> noiseBlanker -> notch -> bandpass -> NR -> output
-
-**Final full chain order:**
-`input(highpass) -> lowpass -> peak -> noiseBlanker -> notch -> bandpass -> NR -> output`
-
----
-
-#### Task 10: Wire RxDspChain into AudioManager RX playback path
-
-**Files:**
-- `ui/src/lib/audio/audio-manager.ts`
-- `ui/src/lib/audio/rx-dsp-chain.ts`
-
-Replace the existing `DspChain` import and usage with `RxDspChain`.
-
-**Changes to AudioManager:**
-- Replace `import { DspChain }` with `import { RxDspChain }`
-- Replace `private dspChain: DspChain | null` with `private rxDspChain: RxDspChain | null`
-- In `init()`: instantiate `RxDspChain`, call `await rxDspChain.build()`, wire:
-  `workletNode -> rxDspChain.input` and `rxDspChain.output -> squelchNode -> gainNode -> destination`
-- Expose `getRxDspChain(): RxDspChain | null` getter for UI components to call
-- In `destroy()`: call `rxDspChain.destroy()`
-- Remove old `DspChain` references
-
-**Backward compatibility:**
-- The existing `DspPanel.svelte` component imports `DspChain` type. Update its import to `RxDspChain` and adjust property access to match new API.
-- Ensure all existing DSP panel functionality (bandpass, notch, NR, compressor, EQ) still works via the new chain
-
-**Acceptance criteria:**
-- Audio plays through the RX DSP chain
-- All existing DSP controls still function
-- No TypeScript errors from `npm run build`
-
----
-
-#### Task 11: TxDspChain -- highpass + lowpass filter nodes
-
-**File:** `ui/src/lib/audio/tx-dsp-chain.ts` (new file)
-
-Create a new `TxDspChain` class for the TX audio path.
-
-**Class structure:**
-```typescript
-export class TxDspChain {
-    private ctx: AudioContext;
-    private highpassNode: BiquadFilterNode | null = null;
-    private lowpassNode: BiquadFilterNode | null = null;
-    // ... (other nodes in tasks 12-15)
-
-    get input(): AudioNode { ... }
-    get output(): AudioNode { ... }
-
-    async build(): Promise<void> { ... }
-    destroy(): void { ... }
-}
-```
-
-**Highpass node:**
-- `BiquadFilterNode`, `type = 'highpass'`, default 100 Hz
-- Bypassed by default: freq = 1 Hz
-- `setHighpass(freqHz: number)`, `enableHighpass(enabled: boolean)`, `isHighpassEnabled(): boolean`
-
-**Lowpass node:**
-- `BiquadFilterNode`, `type = 'lowpass'`, default 3000 Hz
-- Bypassed by default: freq = Nyquist
-- `setLowpass(freqHz: number)`, `enableLowpass(enabled: boolean)`, `isLowpassEnabled(): boolean`
-
-Wire: highpass -> lowpass -> output
-
----
-
-#### Task 12: TxDspChain -- 3-band EQ (3x BiquadFilterNode)
-
-**File:** `ui/src/lib/audio/tx-dsp-chain.ts`
-
-Add 3-band EQ to `TxDspChain`.
-
-**Nodes:**
-- `bassNode`: `BiquadFilterNode`, `type = 'lowshelf'`, freq 200 Hz, default gain 0 dB
-- `midNode`: `BiquadFilterNode`, `type = 'peaking'`, freq 1000 Hz, Q 1.0, default gain 0 dB
-- `trebleNode`: `BiquadFilterNode`, `type = 'highshelf'`, freq 3000 Hz, default gain 0 dB
-- Bypassed by default: all gains = 0 dB
-- `setBass(gainDb: number)`, `setMid(gainDb: number)`, `setTreble(gainDb: number)`: range -20 to +20
-- `enableEq(enabled: boolean)`: toggle; when disabled, all gains = 0
-- `isEqEnabled(): boolean`
-
-Wire: highpass -> lowpass -> bass -> mid -> treble -> (rest)
-
----
-
-#### Task 13: TxDspChain -- vocal compressor (DynamicsCompressorNode)
-
-**File:** `ui/src/lib/audio/tx-dsp-chain.ts`
-
-Add vocal compressor with presets to `TxDspChain`.
-
-**Compressor node:**
-- `DynamicsCompressorNode`
-- Presets (define as a `Record<string, CompressorParams>` constant):
-  - `"light"`: threshold -20, ratio 2, attack 0.003, release 0.25
-  - `"medium"`: threshold -24, ratio 4, attack 0.003, release 0.25
-  - `"heavy"`: threshold -30, ratio 8, attack 0.001, release 0.1
-  - `"manual"`: use whatever the operator sets
-- Bypassed by default: ratio = 1, threshold = 0
-- `setCompressorPreset(preset: 'light' | 'medium' | 'heavy' | 'manual')`: apply preset values
-- `setCompressor(threshold: number, ratio: number, attack: number, release: number)`: manual params (also sets preset to 'manual')
-- `enableCompressor(enabled: boolean)`: toggle
-- `isCompressorEnabled(): boolean`
-- `getCompressorPreset(): string`
-
-Wire: ... -> treble -> compressor -> (rest)
-
----
-
-#### Task 14: TxDspChain -- limiter stage (DynamicsCompressorNode, high ratio)
-
-**File:** `ui/src/lib/audio/tx-dsp-chain.ts`
-
-Add a limiter as the last dynamics stage in `TxDspChain`.
-
-**Limiter node:**
-- `DynamicsCompressorNode` configured as a hard limiter
-- Default: threshold -3 dBFS, ratio 20, knee 0, attack 0.001s, release 0.01s
-- Bypassed by default: ratio = 1, threshold = 0
-- `setLimiterThreshold(thresholdDb: number)`: range -20 to 0
-- `enableLimiter(enabled: boolean)`: toggle
-- `isLimiterEnabled(): boolean`
-
-Wire: ... -> compressor -> limiter -> (rest)
-
----
-
-#### Task 15: TxDspChain -- noise gate (threshold-based gate node)
-
-**File:** `ui/src/lib/audio/tx-dsp-chain.ts`
-
-Add a noise gate to `TxDspChain`.
-
-**Gate implementation:**
-- Use a `GainNode` (gateNode) whose gain is snapped to 0 or 1
-- Use an `AnalyserNode` feeding a periodic check (via `requestAnimationFrame` or a `setInterval` at 50ms) that computes RMS of the input signal
-- If RMS (in dBFS) is above `gateThreshold`, gain = 1 (open); otherwise gain = 0 (closed)
-- Add a hold timer (default 100ms) to prevent chatter
-- `setGateThreshold(thresholdDb: number)`: range -100 to 0
-- `enableGate(enabled: boolean)`: toggle; when disabled, gain always = 1
-- `isGateEnabled(): boolean`
-- `destroy()` must clear the interval/RAF
-
-**Final full TX chain order:**
-`input(highpass) -> lowpass -> bass -> mid -> treble -> compressor -> limiter -> gateAnalyser + gateNode -> output`
-
-The analyser taps the signal before the gate node for level measurement.
-
-Wire: ... -> limiter -> analyser (tap) -> gateNode -> output
-
----
-
-#### Task 16: Wire TxDspChain into AudioManager TX capture path
-
-**File:** `ui/src/lib/audio/audio-manager.ts`
-
-Insert `TxDspChain` into the TX audio path, between the microphone source and the PCM worklet node.
-
-**Changes to AudioManager:**
-- Add `import { TxDspChain }` from `./tx-dsp-chain.js`
-- Add `private txDspChain: TxDspChain | null = null`
-- In TX start path (where `micSource` is connected):
-  - Instantiate `TxDspChain`, call `await txDspChain.build()`
-  - Wire: `micSource -> txDspChain.input` and `txDspChain.output -> workletNode` (TX input)
-  - Previously: `micSource -> workletNode` directly
-- Expose `getTxDspChain(): TxDspChain | null` getter
-- In TX stop / `destroy()`: call `txDspChain.destroy()`
-
-**Acceptance criteria:**
-- TX audio passes through the TX DSP chain
-- When all TX DSP stages are disabled (default), audio is bit-identical to bypass
-- No TypeScript errors from `npm run build`
-
----
-
-#### Task 17: RxDspPillRow component
-
-**File:** `ui/src/lib/components/RxDspPillRow.svelte` (new file)
-
-A horizontal row of pill-shaped buttons, one per RX DSP stage, displayed below the frequency display.
-
-**Props:**
-- `rxDspChain: RxDspChain | null`
-
-**Pills (one per filter):**
-- Highpass, Lowpass, Peak, NB (noise blanker), Notch, Bandpass, NR
-- Each pill shows the filter name (abbreviated)
-- Active (enabled) pills use an accent color (e.g., `bg-sky-500 text-white`)
-- Inactive pills use a muted style (e.g., `bg-gray-700 text-gray-400`)
-- Click on a pill opens the `RxDspPopover` for that filter (Task 18)
-- If `rxDspChain` is null, all pills are disabled/grayed
-
-**Accessibility:**
-- Each pill is a `<button>` with `aria-pressed` reflecting enabled state
-- Keyboard navigable (tab order)
-
----
-
-#### Task 18: RxDspPopover component
-
-**File:** `ui/src/lib/components/RxDspPopover.svelte` (new file)
-
-A popover/dropdown panel that appears when an RX DSP pill is clicked, showing controls for that specific filter.
-
-**Props:**
-- `rxDspChain: RxDspChain | null`
-- `filter: 'highpass' | 'lowpass' | 'peak' | 'noiseBlanker' | 'notch' | 'bandpass' | 'nr'`
-- `open: boolean` (bindable)
-- `anchor: HTMLElement | null` (for positioning)
-
-**Content per filter:**
-- **Highpass**: on/off toggle, frequency slider (50-500 Hz)
-- **Lowpass**: on/off toggle, frequency slider (1500-5000 Hz)
-- **Peak**: on/off toggle, frequency slider, gain slider (-20 to +20 dB), Q slider (0.1-30)
-- **Noise Blanker**: on/off toggle, 50/60 Hz radio buttons
-- **Notch**: on/off toggle, mode selector (manual/auto), frequency slider, Q slider
-- **Bandpass**: on/off toggle, preset pills (voice/CW/manual), center+width sliders (when manual)
-- **NR**: on/off toggle, amount slider (0-100%)
-
-**Behavior:**
-- Changes apply immediately to `rxDspChain` (call the appropriate setter)
-- Emit a `change` event with the current filter state (for persistence layer, Task 24)
-- Close on click-outside or Escape key
-
-**Accessibility:**
-- Focus trap when open
-- Escape closes
-- Sliders use `<input type="range">` with `aria-label`
-
----
-
-#### Task 19: TxDspPanel component
-
-**File:** `ui/src/lib/components/TxDspPanel.svelte` (new file)
-
-A button co-located with the PTT button area that opens the TX DSP menu.
-
-**Props:**
-- `txDspChain: TxDspChain | null`
-
-**UI:**
-- A single button labeled "TX DSP" or a gear icon
-- Badge/indicator showing number of active TX DSP stages (e.g., "3" if 3 stages enabled)
-- Click opens `TxDspMenu` (Task 20) as a slide-up panel or popover
-
-**Accessibility:**
-- `<button>` with `aria-expanded` and `aria-haspopup="dialog"`
-- Keyboard accessible
-
----
-
-#### Task 20: TxDspMenu component
-
-**File:** `ui/src/lib/components/TxDspMenu.svelte` (new file)
-
-A menu/panel for configuring all TX DSP stages.
-
-**Props:**
-- `txDspChain: TxDspChain | null`
-- `open: boolean` (bindable)
-
-**Sections (collapsible):**
-1. **Filters**: highpass on/off + freq slider, lowpass on/off + freq slider
-2. **EQ**: on/off toggle, bass/mid/treble gain sliders (-20 to +20 dB)
-3. **Compressor**: on/off toggle, preset pills (light/medium/heavy/manual), when manual: threshold/ratio/attack/release sliders
-4. **Limiter**: on/off toggle, threshold slider (-20 to 0 dB)
-5. **Gate**: on/off toggle, threshold slider (-100 to 0 dB)
-
-**Behavior:**
-- Changes apply immediately to `txDspChain`
-- Emit `change` event for persistence (Task 24)
-- Close on click-outside or Escape
-
-**Accessibility:**
-- Focus trap, Escape closes
-- Collapsible sections use `<details>/<summary>` or equivalent with `aria-expanded`
-
----
-
-#### Task 21: Integrate RxDspPillRow into main page layout
-
-**File:** `ui/src/routes/+page.svelte`
-
-**Changes:**
-- Import `RxDspPillRow` from `$lib/components/RxDspPillRow.svelte`
-- Place `<RxDspPillRow rxDspChain={audioManager?.getRxDspChain()} />` below the `FrequencyDisplay` component, above the waterfall
-- Pass the `RxDspChain` instance obtained from `AudioManager.getRxDspChain()`
-- Wire `change` events from pill row to the persistence layer (Task 24)
-
-**Acceptance criteria:**
-- Pill row renders on the main page
-- Clicking a pill opens its popover
-- Toggling a filter audibly affects RX audio
-
----
-
-#### Task 22: Integrate TxDspPanel into PTT area
-
-**File:** `ui/src/routes/+page.svelte`
-
-**Changes:**
-- Import `TxDspPanel` from `$lib/components/TxDspPanel.svelte`
-- Place `<TxDspPanel txDspChain={audioManager?.getTxDspChain()} />` adjacent to the `PttButton` component
-- Wire `change` events to persistence layer (Task 24)
-
-**Acceptance criteria:**
-- TX DSP button renders next to PTT
-- Opening the menu shows all TX DSP controls
-- Toggling a TX DSP stage audibly affects transmitted audio
-
----
-
-#### Task 23: Load DSP config from backend on radio connect
-
-**Files:**
-- `ui/src/lib/api.ts` -- add `getDspConfig(radioId: string)` and `patchDspConfig(radioId: string, patch: object)` functions
-- `ui/src/routes/+page.svelte` or appropriate connection handler
-
-**getDspConfig:**
-- `GET /api/radios/{radioId}/dsp`
-- Returns `{ rx: RxDspConfig, tx: TxDspConfig }`
-- TypeScript interfaces matching backend schema
-
-**patchDspConfig:**
-- `PATCH /api/radios/{radioId}/dsp`
-- Accepts partial `{ rx?: Partial<RxDspConfig>, tx?: Partial<TxDspConfig> }`
-- Returns updated full config
-
-**Load on connect:**
-- After `AudioManager` is initialized and DSP chains are built, call `getDspConfig(radioId)`
-- Apply returned RX config values to `RxDspChain` (call each setter: `enableHighpass`, `setHighpass`, etc.)
-- Apply returned TX config values to `TxDspChain`
-- If GET fails (e.g., network error), log warning and use defaults (all disabled)
-
-**Acceptance criteria:**
-- On page load with a configured radio, DSP settings are restored from backend
-- If backend has no DSP config (defaults), all filters start disabled
-
----
-
-#### Task 24: Debounced save DSP config to backend on parameter change
-
-**Files:**
-- `ui/src/routes/+page.svelte` or a new `ui/src/lib/dsp-persistence.ts` utility
+Add a `field_validator` on `RadioConfig.id` that constrains the radio ID to a safe character set. This prevents path traversal in env file writes (`server/routers/system.py` line 40) and systemd unit name injection (line 82).
 
 **Implementation:**
-- Create a `DspPersistence` class or utility:
-  - Holds the current radio ID and a 500ms debounce timer
-  - `saveRx(partialConfig: Partial<RxDspConfig>)`: debounced PATCH with `{ rx: partialConfig }`
-  - `saveTx(partialConfig: Partial<TxDspConfig>)`: debounced PATCH with `{ tx: partialConfig }`
-  - On debounce fire: calls `patchDspConfig(radioId, pendingPatch)` from `api.ts`
-  - Merges multiple rapid changes into one PATCH (accumulate partial updates during debounce window)
-- Wire `change` events from `RxDspPillRow`/`RxDspPopover` to `saveRx()`
-- Wire `change` events from `TxDspPanel`/`TxDspMenu` to `saveTx()`
-- On PATCH failure: log error, do not retry (settings are still applied locally, just not persisted)
+- Add to `RadioConfig`:
+  ```python
+  @field_validator("id")
+  @classmethod
+  def id_must_be_safe(cls, v: str) -> str:
+      import re
+      if not re.fullmatch(r"[a-z0-9][a-z0-9_-]{0,62}", v):
+          raise ValueError(
+              "Radio ID must be 1-63 chars, start with alphanumeric, "
+              "and contain only lowercase letters, digits, hyphens, and underscores"
+          )
+      return v
+  ```
+- Pattern: `^[a-z0-9][a-z0-9_-]{0,62}$` -- lowercase alphanumeric start, then lowercase alphanumeric, hyphens, underscores. Max 63 chars (systemd unit name limit).
 
 **Acceptance criteria:**
-- Changing a filter parameter triggers a PATCH after 500ms of inactivity
-- Rapid successive changes are batched into a single PATCH
-- Reloading the page restores the last-saved settings
+- `RadioConfig(id="radio-1", ...)` passes validation
+- `RadioConfig(id="../../etc/passwd", ...)` raises `ValidationError`
+- `RadioConfig(id="radio with spaces", ...)` raises `ValidationError`
+- `RadioConfig(id="", ...)` raises `ValidationError`
+- Existing tests still pass (existing test configs must use conforming IDs)
 
 ---
 
-#### Task 25: Backend unit tests for RxDspConfig and TxDspConfig schema validation
+#### Task 02: Validate mode strings against Hamlib mode list
 
-**File:** `server/tests/test_dsp_config.py` (new file)
+**Audit ref:** C2 (command injection via mode string)
+**Files:** `server/state.py` (line 244), `server/routers/cat.py` (lines 84, 234)
 
-**Test cases:**
-- `test_rx_dsp_config_defaults`: `RxDspConfig()` produces all-disabled defaults
-- `test_tx_dsp_config_defaults`: `TxDspConfig()` produces all-disabled defaults
-- `test_rx_dsp_highpass_freq_range`: values below 50 and above 500 raise `ValidationError`
-- `test_rx_dsp_lowpass_freq_range`: values below 1500 and above 5000 raise `ValidationError`
-- `test_rx_dsp_noise_blanker_freq_values`: only 50 and 60 accepted
-- `test_rx_dsp_notch_mode_literal`: only "manual" and "auto" accepted
-- `test_rx_dsp_bandpass_preset_literal`: only "voice", "cw", "manual" accepted
-- `test_rx_dsp_nr_amount_range`: values below 0.0 and above 1.0 raise `ValidationError`
-- `test_tx_dsp_compressor_preset_literal`: only "off", "light", "medium", "heavy", "manual" accepted
-- `test_tx_dsp_gate_threshold_range`: values below -100 and above 0 raise `ValidationError`
-- `test_radio_config_with_dsp_roundtrip`: `RadioConfig` with nested DSP configs serializes and deserializes correctly
-- `test_radio_config_without_dsp_backward_compat`: `RadioConfig` dict without `rx_dsp`/`tx_dsp` keys parses with defaults
+Add server-side mode validation before any mode string reaches `send_command`. The `modes.py` module already provides `get_modes(hamlib_model)` which returns the curated list. Enforce it.
+
+**Implementation:**
+
+In `server/state.py`, add validation in `set_mode()`:
+```python
+async def set_mode(self, mode: str) -> None:
+    from modes import get_modes
+    allowed = get_modes(self.config.hamlib_model)
+    if mode not in allowed:
+        raise RigctldError(-1, f"Invalid mode {mode!r}. Allowed: {', '.join(allowed)}")
+    ...
+```
+
+This protects both the REST endpoint (`cat.py` line 84-85) and the WebSocket handler (`cat.py` line 234) since both call `radio.set_mode()`.
 
 **Acceptance criteria:**
-- All tests pass with `uv run pytest tests/test_dsp_config.py`
+- `set_mode("USB")` succeeds for a radio whose model supports USB
+- `set_mode("USB\n+\\set_ptt 1")` raises `RigctldError`
+- `set_mode("INVALID_MODE")` raises `RigctldError`
+- Simulation mode also validates (reject before short-circuit)
 
 ---
 
-#### Task 26: Backend integration tests for DSP config GET/PATCH
+#### Task 03: Sanitize all rigctld command string inputs
 
-**File:** `server/tests/test_dsp_api.py` (new file)
+**Audit ref:** C2 (command injection via rigctld protocol)
+**File:** `server/state.py`
 
-Use `httpx.AsyncClient` with FastAPI `TestClient` pattern (or `pytest-asyncio` + `app` fixture).
+Add a general-purpose input sanitizer for all values interpolated into rigctld commands. This is defense-in-depth on top of the per-field validation in Task 02.
 
-**Test cases:**
-- `test_get_dsp_config_defaults`: GET returns all-disabled defaults for a valid radio
-- `test_get_dsp_config_404`: GET with nonexistent radio_id returns 404
-- `test_patch_rx_dsp_partial`: PATCH `{"rx": {"highpass_enabled": true, "highpass_freq": 200}}` updates only those fields, TX unchanged
-- `test_patch_tx_dsp_partial`: PATCH `{"tx": {"compressor_enabled": true, "compressor_preset": "medium"}}` updates only those fields, RX unchanged
-- `test_patch_dsp_invalid_value_409`: PATCH with out-of-range value returns 409 with RFC 7807 body
-- `test_patch_dsp_persists_to_disk`: After PATCH, reload config from disk and verify DSP values present
-- `test_patch_dsp_empty_body_noop`: PATCH `{}` returns current config unchanged
+**Implementation:**
+
+Add a private helper to `RadioInstance`:
+```python
+@staticmethod
+def _sanitize_rigctld_param(value: str) -> str:
+    """Strip newlines, carriage returns, and null bytes from rigctld parameters."""
+    sanitized = value.replace("\n", "").replace("\r", "").replace("\x00", "")
+    if not sanitized or " " in sanitized:
+        raise RigctldError(-1, f"Invalid rigctld parameter: {value!r}")
+    return sanitized
+```
+
+Apply `_sanitize_rigctld_param()` in:
+- `set_mode()` (line 250) -- on `mode` before interpolation
+- `set_vfo()` (line 278) -- on `vfo` before interpolation (VFO is already allowlisted at the router level, but defense-in-depth here)
+
+Integer/float parameters (`set_freq`, `set_ptt`, `set_ctcss`) are already type-coerced before interpolation, so they are not injectable. But add a comment explaining why.
 
 **Acceptance criteria:**
-- All tests pass with `uv run pytest tests/test_dsp_api.py`
+- Strings containing `\n`, `\r`, or `\x00` are rejected with `RigctldError`
+- Strings containing spaces are rejected
+- Clean strings pass through unchanged
+- All existing functionality still works
 
 ---
 
-#### Task 27: Frontend unit tests for RxDspChain node wiring and parameter application
+#### Task 04: Validate audio device names in config model
 
-**File:** `ui/src/lib/audio/rx-dsp-chain.test.ts` (new file)
+**Audit ref:** C3 (audio subprocess argument injection)
+**File:** `server/config.py`
 
-Use Vitest with a mock/stub `AudioContext` (e.g., `standardized-audio-context-mock` or manual mocks).
+Add `field_validator` entries for `RadioConfig.audio_source` and `RadioConfig.audio_sink` to reject suspicious values.
 
-**Test cases:**
-- `test_build_creates_all_nodes`: After `build()`, all node properties are non-null (except NR which may be null if worklet fails)
-- `test_chain_order`: `input` is the highpass node, `output` is the last node (NR or bandpass if NR unavailable)
-- `test_highpass_enable_disable`: enabling sets freq to configured value, disabling sets freq to 1 Hz
-- `test_lowpass_enable_disable`: enabling sets freq to configured value, disabling sets freq to Nyquist
-- `test_bandpass_presets`: setting "voice" preset applies center=1500/width=2400, "cw" applies center=700/width=500
-- `test_notch_enable_disable`: enabling sets Q to configured value, disabling sets Q to 0.01
-- `test_noise_blanker_freq_switch`: setting 60 Hz changes notch frequency to 60
-- `test_nr_amount_clamped`: values outside 0-1 are clamped
-- `test_destroy_disconnects_all`: after `destroy()`, all node refs are null
+**Implementation:**
+```python
+@field_validator("audio_source", "audio_sink")
+@classmethod
+def audio_device_must_be_safe(cls, v: str) -> str:
+    if not v:  # empty is valid (means "not configured")
+        return v
+    # Reject control characters, shell metacharacters, and excessively long names
+    import re
+    if len(v) > 256:
+        raise ValueError("Audio device name too long (max 256 chars)")
+    if re.search(r"[\x00-\x1f\x7f;|&`$]", v):
+        raise ValueError(f"Audio device name contains invalid characters: {v!r}")
+    return v
+```
 
 **Acceptance criteria:**
-- All tests pass with `npm test` (Vitest)
+- `audio_source="alsa_input.usb-Burr-Brown"` passes
+- `audio_source=""` passes (not configured)
+- `audio_source="device\nwith\nnewlines"` raises `ValidationError`
+- `audio_source="$(evil)"` raises `ValidationError`
 
 ---
 
-#### Task 28: Frontend unit tests for TxDspChain node wiring and parameter application
+#### Task 05: Add asyncio.Lock for config mutations
 
-**File:** `ui/src/lib/audio/tx-dsp-chain.test.ts` (new file)
+**Audit ref:** H4 (race condition in config mutation)
+**Files:** `server/main.py`, `server/routers/system.py`, `server/routers/dsp.py`
 
-Use Vitest with mock AudioContext.
+Create a shared `asyncio.Lock` on `app.state` and acquire it in all config-mutating endpoints.
 
-**Test cases:**
-- `test_build_creates_all_nodes`: After `build()`, all node properties are non-null
-- `test_chain_order`: `input` is highpass, `output` is gateNode
-- `test_highpass_enable_disable`: enabling/disabling toggles cutoff
-- `test_lowpass_enable_disable`: enabling/disabling toggles cutoff
-- `test_eq_enable_disable`: enabling preserves gain values, disabling zeros all gains
-- `test_compressor_presets`: each preset applies correct threshold/ratio/attack/release values
-- `test_compressor_manual_override`: setting manual params changes preset to "manual"
-- `test_limiter_enable_disable`: enabling applies threshold, disabling sets ratio=1/threshold=0
-- `test_gate_enable_disable`: enabling allows gate to close (gain=0), disabling forces gain=1
-- `test_destroy_cleans_up`: after `destroy()`, all node refs are null and interval/RAF cleared
+**Implementation:**
+
+In `server/main.py`, during lifespan setup:
+```python
+app.state.config_lock = asyncio.Lock()
+```
+
+In every endpoint that reads-then-writes `app.state.config`, wrap the critical section:
+
+`server/routers/system.py` -- `post_config()` (line 122):
+```python
+async with request.app.state.config_lock:
+    # ... existing validate + save + assign logic
+```
+
+`server/routers/dsp.py` -- `patch_dsp()` (line 46):
+```python
+async with request.app.state.config_lock:
+    # ... existing read + merge + validate + save + assign logic
+```
+
+Also apply to any other config-mutating endpoints in `system.py` (e.g., preset endpoints at lines 298-332, 340-373, 382-393, 401-431 if they exist).
 
 **Acceptance criteria:**
-- All tests pass with `npm test` (Vitest)
+- Two concurrent PATCH requests to `/api/radios/{id}/dsp` with different fields both persist (no lost update)
+- A concurrent `POST /api/config` and `PATCH /api/radios/{id}/dsp` serialize correctly
+- No deadlocks under normal operation
+
+---
+
+#### Task 06: Fix float-to-Hz frequency conversion precision
+
+**Audit ref:** L6 (float precision in frequency operations)
+**File:** `server/state.py` (line 240)
+
+**Change:**
+```python
+# Before:
+hz = int(mhz * 1_000_000)
+
+# After:
+hz = round(mhz * 1_000_000)
+```
+
+This ensures `14.074` MHz becomes `14074000` Hz instead of `14073999` Hz.
+
+**Acceptance criteria:**
+- `14.074 * 1_000_000` produces `14074000` after `round()`
+- `7.0` MHz produces `7000000` Hz (no regression)
+
+---
+
+#### Task 07: Fix S-meter calculation for over-S9 readings
+
+**Audit ref:** H2 (S-meter loses over-S9 information)
+**File:** `server/state.py` (line 318-336)
+
+The current formula clamps S-units to 9 and discards "over S9" information. The S-meter display needs both the S-unit value (clamped 0-9) and the dB-over-S9 value for readings above S9.
+
+**Change the return type and formula:**
+
+```python
+async def get_smeter(self) -> tuple[int, int, int]:
+    """Return S-meter reading as (S-units 0-9, dB_over_s9, raw_dBm).
+
+    S9 = -73 dBm; each S-unit = 6 dB.
+    For readings above S9, s_units=9 and db_over contains the excess.
+    """
+    if self.simulation:
+        return (5, 0, -103)
+    raw = await self.send_command(r"+\get_level STRENGTH")
+    for line in raw.splitlines():
+        stripped = line.strip()
+        if stripped:
+            try:
+                dbm = float(stripped)
+                raw_s = (dbm + 73) / 6 + 9
+                s_units = max(0, min(9, round(raw_s)))
+                db_over = max(0, round(dbm + 73)) if dbm > -73 else 0
+                return (s_units, db_over, int(dbm))
+            except ValueError:
+                pass
+    raise RigctldError(-8, f"Cannot parse get_level STRENGTH response: {raw!r}")
+```
+
+**Update all callers:**
+- `server/state.py` poll loop where `get_smeter()` result is used -- update destructuring from 2-tuple to 3-tuple
+- `server/routers/cat.py` WebSocket state push -- include `db_over` in the state message
+- Frontend `SmeterDisplay` component -- display "S9+20" format when `db_over > 0`
+
+**Files to update:**
+- `server/state.py` -- return type and formula
+- `server/routers/cat.py` -- WebSocket state message shape (if smeter is pushed there)
+- `ui/src/lib/components/SmeterDisplay.svelte` -- render over-S9 readings
+
+**Acceptance criteria:**
+- -73 dBm returns `(9, 0, -73)` -- S9 exactly
+- -121 dBm returns `(1, 0, -121)` -- S1
+- -37 dBm returns `(9, 36, -37)` -- S9+36 dB
+- -130 dBm returns `(0, 0, -130)` -- below S0, clamped
+- Simulation returns `(5, 0, -103)`
+
+---
+
+#### Task 08: Replace single SSE queue with broadcast pattern
+
+**Audit ref:** H1 (single-consumer SSE queue loses events for other clients)
+**Files:** `server/devices.py`, `server/routers/devices.py`, `server/main.py`
+
+Replace the single `asyncio.Queue` with a broadcast mechanism so all SSE subscribers receive every event.
+
+**Implementation:**
+
+In `server/devices.py`, add a `DeviceEventBroadcaster` class:
+```python
+class DeviceEventBroadcaster:
+    """Fan-out device events to multiple SSE subscribers."""
+
+    def __init__(self) -> None:
+        self._subscribers: list[asyncio.Queue[DeviceEvent]] = []
+
+    def subscribe(self) -> asyncio.Queue[DeviceEvent]:
+        q: asyncio.Queue[DeviceEvent] = asyncio.Queue(maxsize=64)
+        self._subscribers.append(q)
+        return q
+
+    def unsubscribe(self, q: asyncio.Queue[DeviceEvent]) -> None:
+        with contextlib.suppress(ValueError):
+            self._subscribers.remove(q)
+
+    async def publish(self, event: DeviceEvent) -> None:
+        for q in self._subscribers:
+            try:
+                q.put_nowait(event)
+            except asyncio.QueueFull:
+                pass  # drop for slow consumers
+```
+
+In `server/main.py`:
+- Replace `app.state.device_events = asyncio.Queue()` with `app.state.device_broadcaster = DeviceEventBroadcaster()`
+- Update the udev monitor to call `broadcaster.publish(event)` instead of `queue.put(event)`
+
+In `server/routers/devices.py` -- `get_device_events()`:
+- Call `broadcaster.subscribe()` to get a per-client queue
+- Use the per-client queue in the event generator
+- Call `broadcaster.unsubscribe(q)` on disconnect (in a `finally` block)
+
+**Acceptance criteria:**
+- Two simultaneous SSE clients both receive the same device events
+- Disconnecting one client does not affect the other
+- Slow consumers are dropped rather than blocking publishers
+
+---
+
+#### Task 09: Fix setup wizard SSE no-op handler
+
+**Audit ref:** M8 (SSE connection opened but events never processed)
+**File:** `ui/src/routes/setup/+page.svelte` (lines 40-46)
+
+The SSE connection in the setup wizard consumes events from the queue but does nothing with them. With the broadcast pattern from Task 08, this is less harmful (each client gets its own queue), but the handler should either be removed or made functional.
+
+**Implementation:**
+- Remove the top-level `$effect` that opens the no-op `EventSource`
+- If device change reactivity is needed, move it into the individual wizard steps (`StepDetectRadios`, `StepMapAudio`) where the device lists are actually used -- have those steps open their own EventSource and re-fetch device lists on events
+- Alternatively, if the steps already handle their own polling, simply remove the dead SSE connection
+
+**Acceptance criteria:**
+- No orphaned SSE connection opened at the wizard page level
+- Device detection still works in wizard steps that need it
+- No functional regression in the setup wizard flow
+
+---
+
+#### Task 10: Close displaced waterfall WebSocket and kill orphaned subprocess
+
+**Audit ref:** M5 (waterfall WS not cleaned up on displacement)
+**File:** `server/routers/waterfall.py` (lines 78-79)
+
+**Implementation:**
+
+Add displacement logic matching what `cat.py` already does for `ws_control`:
+```python
+# Before accepting the new connection:
+if radio.ws_waterfall is not None:
+    with contextlib.suppress(Exception):
+        await radio.ws_waterfall.close()
+```
+
+Additionally, the existing capture subprocess must be terminated when a new client displaces the old one. The `capture_proc` is local to the WebSocket handler function, so the old handler's `finally` block should already kill it when its WebSocket is closed. Verify this by examining the handler's finally block. If the finally block does not terminate `capture_proc`, add termination logic.
+
+**Acceptance criteria:**
+- Opening a second waterfall WS closes the first one cleanly
+- The orphaned `pw-record` process from the first connection is terminated
+- No zombie processes accumulate when rapidly reconnecting
+
+---
+
+#### Task 11: Flush pending DSP changes on DspPersistence.destroy()
+
+**Audit ref:** M4 (pending DSP changes dropped on navigation)
+**File:** `ui/src/lib/dsp-persistence.ts`
+
+**Change `destroy()` to flush instead of drop:**
+```typescript
+destroy(): void {
+    if (this.rxTimer !== null) {
+        clearTimeout(this.rxTimer);
+        this.rxTimer = null;
+        if (Object.keys(this.pendingRx).length > 0) {
+            const patch = this.pendingRx;
+            this.pendingRx = {};
+            patchDspConfig(this.radioId, { rx: patch }).catch((e) => {
+                console.warn('[DSP] Failed to flush RX DSP on destroy:', e);
+            });
+        }
+    }
+    if (this.txTimer !== null) {
+        clearTimeout(this.txTimer);
+        this.txTimer = null;
+        if (Object.keys(this.pendingTx).length > 0) {
+            const patch = this.pendingTx;
+            this.pendingTx = {};
+            patchDspConfig(this.radioId, { tx: patch }).catch((e) => {
+                console.warn('[DSP] Failed to flush TX DSP on destroy:', e);
+            });
+        }
+    }
+}
+```
+
+Note: This is a fire-and-forget flush. The page may navigate away before the request completes. Consider using `navigator.sendBeacon` if the fetch is unreliable, but for a LAN application the standard fetch should complete fast enough.
+
+**Acceptance criteria:**
+- Adjusting a DSP knob and immediately navigating away persists the change
+- If the PATCH fails, a warning is logged but no error is thrown
+
+---
+
+#### Task 12: Token-based authentication: backend middleware and token management
+
+**Audit ref:** C1 (no authentication or authorization)
+**Files:** `server/main.py`, `server/auth.py` (new file), `server/config.py`
+
+Implement bearer token authentication using `itsdangerous` (already a dependency). The design targets a single-operator LAN deployment: a shared secret token rather than per-user accounts.
+
+**Implementation:**
+
+Create `server/auth.py`:
+- On first startup, generate a random 32-byte token and store it in the config file under `auth.token` (or in a separate `~/.config/riglet/auth_token` file for separation)
+- Provide `verify_token(token: str) -> bool` that does constant-time comparison
+- Provide a FastAPI dependency `require_auth` that reads the `Authorization: Bearer <token>` header and raises 401 if invalid
+- Provide a login endpoint `POST /api/auth/login` that accepts `{"token": "<token>"}` and returns `{"ok": true}` on success, 401 on failure. This lets the frontend validate the token before storing it.
+
+Create auth middleware in `server/main.py`:
+- Add `require_auth` as a dependency to all routers except:
+  - `GET /api/status` (needed for health checks and the setup wizard's restart polling)
+  - `POST /api/auth/login` (the login endpoint itself)
+  - Static file serving (the SPA assets)
+- WebSocket endpoints check the token via a query parameter (`?token=<token>`) since browsers cannot set custom headers on WebSocket connections
+
+Add `auth_token: str = ""` field to `RigletConfig` (or a separate file). On first startup, if empty, generate and persist.
+
+Display the token to the operator:
+- Print it to stdout on startup: `"Auth token: <token> (see ~/.config/riglet/auth_token)"`
+- Include it in `GET /api/status` response ONLY if the request is already authenticated (or on first-time setup when no token exists yet)
+
+**Acceptance criteria:**
+- Unauthenticated requests to `POST /api/config` return 401
+- Unauthenticated requests to `GET /api/status` return 200 (exempt)
+- Authenticated requests with valid `Authorization: Bearer <token>` succeed
+- WebSocket connections with `?token=<valid>` succeed
+- WebSocket connections without token are closed with code 4001
+- Token is generated on first startup and persists across restarts
+
+---
+
+#### Task 13: Token-based authentication: frontend token handling
+
+**Audit ref:** C1 (no authentication -- frontend half)
+**Files:** `ui/src/lib/api.ts`, `ui/src/lib/websocket.ts`, `ui/src/routes/+page.svelte`, `ui/src/lib/stores/auth.ts` (new file)
+
+**Implementation:**
+
+Create `ui/src/lib/stores/auth.ts`:
+- Svelte writable store holding the auth token
+- Load from `localStorage` on init
+- Provide `setToken(token: string)` and `clearToken()` helpers
+
+Update `ui/src/lib/api.ts`:
+- Add `Authorization: Bearer <token>` header to all fetch calls using the token from the auth store
+- On 401 response from any API call, clear the stored token and redirect to a login prompt
+
+Update `ui/src/lib/websocket.ts`:
+- Append `?token=<token>` to WebSocket URLs
+
+Create a login gate:
+- In `+layout.svelte` or `+page.svelte`, check if a valid token exists in localStorage
+- If not, show a simple login form (single text input for the token + submit button)
+- On submit, call `POST /api/auth/login` to validate
+- On success, store the token and proceed to the main UI
+- On failure, show an error message
+
+**Acceptance criteria:**
+- First visit shows login form
+- Entering valid token grants access and persists across page reloads
+- Entering invalid token shows error
+- API calls include the Bearer token
+- WebSocket connections include the token as query parameter
+- 401 from any API call clears the token and shows login form
+
+---
+
+#### Task 14: Remove duplicate RadioDep from audio.py
+
+**Audit ref:** L1 (duplicate type alias)
+**File:** `server/routers/audio.py` (line 47)
+
+**Change:**
+- Remove the local `RadioDep = Annotated[RadioInstance, Depends(get_radio)]` definition at line 47
+- Import `RadioDep` from `deps` instead: `from deps import RadioDep`
+- Verify existing imports: the file already imports `get_radio` from `deps` -- adjust to also import `RadioDep`
+
+**Acceptance criteria:**
+- `audio.py` uses `RadioDep` from `deps.py`
+- No duplicate definition remains
+- `uv run mypy .` passes clean
+
+---
+
+#### Task 15: Extract DRY helper for RX DSP config application in +page.svelte
+
+**Audit ref:** L2 (duplicated DSP config application code)
+**File:** `ui/src/routes/+page.svelte` (lines ~218-237 and ~286-334)
+
+**Implementation:**
+- Extract the repeated RX DSP config application block (calls to `rx.enableHighpass`, `rx.setHighpass`, etc.) into a standalone function, either:
+  - A local function in `+page.svelte`: `function applyRxDspConfig(rx: RxDspChain, config: RxDspConfig): void`
+  - Or a utility in `ui/src/lib/audio/rx-dsp-chain.ts`: `applyConfig(config: RxDspConfig): void` as a method on `RxDspChain`
+- Replace both call sites (simulation branch and real-radio branch) with a call to the extracted function
+- Do the same for TX DSP if the pattern is duplicated there
+
+**Acceptance criteria:**
+- Only one copy of the DSP config application logic exists
+- Both code paths (simulation and real) produce identical behavior
+- No TypeScript errors
+
+---
+
+#### Task 16: Remove dead code: _MONITOR_START and unused rx-float handler
+
+**Audit refs:** L3 (dead `_MONITOR_START`), L7 (dead `rx-float` message handler)
+**Files:** `server/devices.py` (line 266), `ui/src/lib/audio/audio-manager.ts` (rx-float handler)
+
+**Implementation:**
+- Remove `_MONITOR_START = time.monotonic()` from `server/devices.py` line 266 and its accompanying comment
+- In `ui/src/lib/audio/audio-manager.ts`, locate the `workletNode.port.onmessage` handler that checks for `'rx-float'` message type and remove the dead branch
+
+**Acceptance criteria:**
+- No references to `_MONITOR_START` remain
+- No `'rx-float'` message type check remains in the worklet port handler
+- All tests pass, no TypeScript/mypy errors
+
+---
+
+#### Task 17: Remove or use itsdangerous dependency
+
+**Audit ref:** M7 (unused dependency)
+**File:** `server/pyproject.toml` (line 13)
+
+**Decision depends on Task 12:**
+- If Task 12 uses `itsdangerous` for token generation/signing, keep the dependency and this task is a no-op
+- If Task 12 uses `secrets.token_urlsafe()` (stdlib) instead, remove `itsdangerous` from `pyproject.toml` dependencies and run `uv sync` to update the lockfile
+
+**Acceptance criteria:**
+- `itsdangerous` is either (a) imported and used by `auth.py` or (b) removed from `pyproject.toml`
+- No unused dependency in the dependency list
+
+---
+
+#### Task 18: Frequency bounds validation against band plan
+
+**Audit ref:** L5 (no frequency bounds check)
+**Files:** `server/state.py`, `server/routers/cat.py`
+
+**Implementation:**
+
+In `server/state.py` `set_freq()`, add optional bounds checking:
+```python
+async def set_freq(self, mhz: float) -> None:
+    if mhz <= 0:
+        raise RigctldError(-1, f"Frequency must be positive, got {mhz}")
+    if mhz > 500:  # No ham band above 450 MHz for HF/VHF rigs
+        raise RigctldError(-1, f"Frequency {mhz} MHz exceeds maximum")
+    ...
+```
+
+This is a sanity check, not a band-plan enforcement (which would be overly restrictive for SWL/receive-only use). The important thing is rejecting clearly invalid values (negative, zero, absurdly high).
+
+**Acceptance criteria:**
+- `set_freq(14.074)` succeeds
+- `set_freq(0)` raises `RigctldError`
+- `set_freq(-1)` raises `RigctldError`
+- `set_freq(99999)` raises `RigctldError`
+
+---
+
+#### Task 19: Sanitize env file content (escape newlines in values)
+
+**Audit ref:** M2 (env file content injection)
+**File:** `server/routers/system.py` (lines 43-48)
+
+**Implementation:**
+
+Add a sanitization step when writing env file values. All values interpolated into the env file should have newlines, carriage returns, and null bytes stripped:
+
+```python
+def _sanitize_env_value(value: str | int) -> str:
+    """Remove characters that could inject additional env vars."""
+    s = str(value)
+    return s.replace("\n", "").replace("\r", "").replace("\x00", "")
+```
+
+Apply to all interpolated values in `write_env_files()`:
+```python
+env_path.write_text(
+    f"HAMLIB_MODEL={_sanitize_env_value(radio.hamlib_model)}\n"
+    f"SERIAL_PORT={_sanitize_env_value(radio.serial_port)}\n"
+    f"BAUD_RATE={_sanitize_env_value(radio.baud_rate)}\n"
+    f"RIGCTLD_PORT={_sanitize_env_value(radio.rigctld_port)}\n"
+    f"PTT_METHOD={_sanitize_env_value(radio.ptt_method)}\n",
+    encoding="utf-8",
+)
+```
+
+With Task 01 (radio ID validation) preventing path traversal and this task preventing content injection, the env file write path is fully hardened.
+
+**Acceptance criteria:**
+- Normal values pass through unchanged
+- Values containing `\n` have them stripped silently
+- Written env files contain exactly 5 lines (one per variable)
+
+---
+
+#### Task 20: Backend tests for new input validation and auth
+
+**Audit refs:** All Critical/High fixes
+**File:** `server/tests/test_security.py` (new file)
+
+**Test cases:**
+
+Radio ID validation:
+- `test_radio_id_valid_formats`: "radio-1", "hf_rig", "a" all pass
+- `test_radio_id_path_traversal`: "../../etc" raises ValidationError
+- `test_radio_id_spaces`: "my radio" raises ValidationError
+- `test_radio_id_empty`: "" raises ValidationError
+
+Mode validation:
+- `test_set_mode_valid`: valid mode for model succeeds
+- `test_set_mode_injection`: mode with newline raises RigctldError
+- `test_set_mode_unknown`: mode not in list raises RigctldError
+
+Rigctld parameter sanitization:
+- `test_sanitize_newline`: newline in param raises RigctldError
+- `test_sanitize_null`: null byte in param raises RigctldError
+- `test_sanitize_clean`: clean param passes through
+
+Audio device validation:
+- `test_audio_device_empty`: empty string passes
+- `test_audio_device_valid`: normal PipeWire name passes
+- `test_audio_device_injection`: name with shell chars raises ValidationError
+
+Config lock:
+- `test_concurrent_config_writes`: two concurrent PATCHes both persist their changes
+
+Auth (if Task 12 is complete):
+- `test_unauthenticated_config_post_401`: POST /config without token returns 401
+- `test_authenticated_config_post_200`: POST /config with valid token succeeds
+- `test_status_no_auth_required`: GET /status returns 200 without token
+- `test_invalid_token_401`: wrong token returns 401
+
+S-meter:
+- `test_smeter_s9_exact`: -73 dBm -> (9, 0, -73)
+- `test_smeter_over_s9`: -37 dBm -> (9, 36, -37)
+- `test_smeter_s1`: -121 dBm -> (1, 0, -121)
+
+Frequency:
+- `test_freq_precision`: 14.074 MHz -> 14074000 Hz
+- `test_freq_negative_rejected`: negative freq raises error
+- `test_freq_zero_rejected`: zero freq raises error
+
+**Acceptance criteria:**
+- All tests pass with `uv run pytest tests/test_security.py`
+- No regressions in existing test suite
+
+---
+
+#### Task 21: Frontend tests for auth token flow
+
+**Audit ref:** C1 (frontend half)
+**File:** `ui/src/lib/stores/auth.test.ts` (new file)
+
+**Test cases:**
+- `test_token_persists_to_localStorage`: `setToken("abc")` stores in localStorage
+- `test_clearToken_removes`: `clearToken()` removes from localStorage
+- `test_api_includes_bearer_header`: fetch calls include `Authorization: Bearer <token>`
+- `test_401_clears_token`: a 401 response triggers token clearance
+
+**Acceptance criteria:**
+- All tests pass with `npm test`

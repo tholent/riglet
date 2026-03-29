@@ -110,9 +110,10 @@ async def test_get_smeter_simulation_returns_fixed_values() -> None:
     radio = RadioInstance("r1", cfg)
     radio.simulation = True
 
-    s_units, dbm = await radio.get_smeter()
+    s_units, db_over, dbm = await radio.get_smeter()
     assert s_units == 5
-    assert dbm == -73
+    assert db_over == 0
+    assert dbm == -103
 
 
 @pytest.mark.asyncio

@@ -66,6 +66,7 @@ async def _setup_app_state(
     app.state.config = config
     app.state.manager = manager
     app.state.device_events = asyncio.Queue()
+    app.state.config_lock = asyncio.Lock()
     return manager
 
 

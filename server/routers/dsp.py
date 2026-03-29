@@ -90,8 +90,9 @@ async def patch_dsp(radio_id: str, request: Request) -> JSONResponse:
     new_radios[idx] = new_radio
     new_config = config.model_copy(update={"radios": new_radios})
 
-    save_config(new_config)
-    request.app.state.config = new_config
+    async with request.app.state.config_lock:
+        save_config(new_config)
+        request.app.state.config = new_config
 
     return JSONResponse(
         content={

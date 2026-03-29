@@ -36,15 +36,6 @@
 			});
 	});
 
-	// SSE subscription for hotplug events during wizard
-	$effect(() => {
-		const evtSource = new EventSource('/api/devices/events');
-		evtSource.onmessage = () => {
-			// Device list changes are handled inside each step via their own effects
-		};
-		return () => evtSource.close();
-	});
-
 	function prev() {
 		if (step > 0) step -= 1;
 	}

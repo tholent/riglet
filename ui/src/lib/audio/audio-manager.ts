@@ -108,8 +108,6 @@ export class AudioManager {
 				if (this.onTxPcmFloat) {
 					this.onTxPcmFloat(_s16leToFloat32(payload));
 				}
-			} else if (type === 'rx-float' && this.onRxPcmFloat) {
-				this.onRxPcmFloat(payload as unknown as Float32Array);
 			}
 		};
 

@@ -72,6 +72,25 @@
 		dspPersistence.saveRx(patch);
 	}
 
+	function applyRxDspConfig(rx: RxDspChain, cfg: RxDspConfig): void {
+		rx.enableHighpass(cfg.highpass_enabled);
+		rx.setHighpass(cfg.highpass_freq);
+		rx.enableLowpass(cfg.lowpass_enabled);
+		rx.setLowpass(cfg.lowpass_freq);
+		rx.enablePeak(cfg.peak_enabled);
+		rx.setPeak(cfg.peak_freq, cfg.peak_gain, cfg.peak_q);
+		rx.enableNoiseBlanker(cfg.noise_blanker_enabled);
+		rx.setNoiseBlankerFreq(cfg.noise_blanker_freq as 50 | 60);
+		rx.enableNotch(cfg.notch_enabled);
+		rx.setNotchMode(cfg.notch_mode);
+		rx.setNotch(cfg.notch_freq, cfg.notch_q);
+		rx.enableBandpass(cfg.bandpass_enabled);
+		rx.setBandpassPreset(cfg.bandpass_preset);
+		rx.setBandpass(cfg.bandpass_center, cfg.bandpass_width);
+		rx.enableNr(cfg.nr_enabled);
+		rx.setNrAmount(cfg.nr_amount);
+	}
+
 	function handleTxDspChange(detail: { param: string; value: unknown }): void {
 		if (detail.param === 'mic_mute') {
 			audioMgr?.setMicMute(detail.value as boolean);
@@ -217,24 +236,7 @@
 			try {
 				const dspCfg = await getDspConfig(radioId);
 				const rx = rxDspChain;
-				if (rx) {
-					rx.enableHighpass(dspCfg.rx.highpass_enabled);
-					rx.setHighpass(dspCfg.rx.highpass_freq);
-					rx.enableLowpass(dspCfg.rx.lowpass_enabled);
-					rx.setLowpass(dspCfg.rx.lowpass_freq);
-					rx.enablePeak(dspCfg.rx.peak_enabled);
-					rx.setPeak(dspCfg.rx.peak_freq, dspCfg.rx.peak_gain, dspCfg.rx.peak_q);
-					rx.enableNoiseBlanker(dspCfg.rx.noise_blanker_enabled);
-					rx.setNoiseBlankerFreq(dspCfg.rx.noise_blanker_freq as 50 | 60);
-					rx.enableNotch(dspCfg.rx.notch_enabled);
-					rx.setNotchMode(dspCfg.rx.notch_mode);
-					rx.setNotch(dspCfg.rx.notch_freq, dspCfg.rx.notch_q);
-					rx.enableBandpass(dspCfg.rx.bandpass_enabled);
-					rx.setBandpassPreset(dspCfg.rx.bandpass_preset);
-					rx.setBandpass(dspCfg.rx.bandpass_center, dspCfg.rx.bandpass_width);
-					rx.enableNr(dspCfg.rx.nr_enabled);
-					rx.setNrAmount(dspCfg.rx.nr_amount);
-				}
+				if (rx) applyRxDspConfig(rx, dspCfg.rx);
 			} catch (e) {
 				console.warn('[DSP] Failed to load DSP config from backend, using defaults:', e);
 			}

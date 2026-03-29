@@ -75,6 +75,12 @@ async def ws_waterfall(websocket: WebSocket, radio_id: str) -> None:
         await websocket.close(code=4004)
         return
 
+    # Close any existing waterfall connection for this radio (displacement).
+    # The displaced handler's finally block will terminate its capture process.
+    if radio.ws_waterfall is not None:
+        with contextlib.suppress(Exception):
+            await radio.ws_waterfall.close()
+
     await websocket.accept()
     radio.ws_waterfall = websocket
     logger.info("ws_waterfall connected for radio %s", radio_id)

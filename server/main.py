@@ -18,7 +18,7 @@ from starlette.responses import Response
 from starlette.types import Scope
 
 from config import RigletConfig, default_config, load_config
-from devices import DeviceEvent, UdevMonitor
+from devices import DeviceEventBroadcaster, UdevMonitor
 from routers.audio import router as _audio_router
 from routers.cat import router as _cat_router
 from routers.devices import router as _devices_router
@@ -47,12 +47,13 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     manager = RadioManager()
     await manager.startup(config)
 
-    device_events: asyncio.Queue[DeviceEvent] = asyncio.Queue()
-    udev_monitor = UdevMonitor(device_events)
+    device_broadcaster = DeviceEventBroadcaster()
+    udev_monitor = UdevMonitor(device_broadcaster)
 
     app.state.config = config
     app.state.manager = manager
-    app.state.device_events = device_events
+    app.state.device_broadcaster = device_broadcaster
+    app.state.config_lock = asyncio.Lock()
 
     async with udev_monitor:
         yield
