@@ -11,11 +11,11 @@
 import { registerRenderer } from './base-renderer.js';
 import type { Renderer, RendererContext, VisualizationData } from './types.js';
 
-// Layout constants
-const MARGIN_LEFT = 44;
-const MARGIN_BOTTOM = 28;
-const MARGIN_RIGHT = 8;
-const MARGIN_TOP = 8;
+// Layout constants — no axis labels, so margins are minimal
+const MARGIN_LEFT = 4;
+const MARGIN_BOTTOM = 4;
+const MARGIN_RIGHT = 4;
+const MARGIN_TOP = 4;
 
 // Peak-hold: fraction of amplitude to decay per frame (~10 fps → ~1 s full decay)
 const PEAK_DECAY_RATE = 0.015;
@@ -182,48 +182,6 @@ export class SpectrumRenderer implements Renderer {
 		ctx.stroke();
 
 		ctx.restore();
-
-		// Axes
-		this._drawAxes(ctx, plotX, plotY, plotW, plotH, toY);
-	}
-
-	private _drawAxes(
-		ctx: CanvasRenderingContext2D,
-		plotX: number,
-		plotY: number,
-		plotW: number,
-		plotH: number,
-		toY: (v: number) => number,
-	): void {
-		ctx.font = '10px monospace';
-		ctx.fillStyle = '#666';
-
-		// dB axis labels (left)
-		ctx.textAlign = 'right';
-		ctx.textBaseline = 'middle';
-		for (let db = DB_MIN; db <= DB_MAX; db += 20) {
-			const y = toY(db);
-			ctx.fillText(`${db}`, plotX - 4, y);
-		}
-
-		// Frequency axis labels (bottom) — just bin indices as relative labels
-		ctx.textAlign = 'center';
-		ctx.textBaseline = 'top';
-		const labels = ['0', '32', '64', '96', '128', '160', '192', '224', '255'];
-		const indices = [0, 32, 64, 96, 128, 160, 192, 224, 255];
-		for (let k = 0; k < labels.length; k++) {
-			const x = plotX + (indices[k] / 255) * plotW;
-			ctx.fillText(labels[k], x, plotY + plotH + 4);
-		}
-
-		// Axis border
-		ctx.strokeStyle = '#333';
-		ctx.lineWidth = 1;
-		ctx.beginPath();
-		ctx.moveTo(plotX, plotY);
-		ctx.lineTo(plotX, plotY + plotH);
-		ctx.lineTo(plotX + plotW, plotY + plotH);
-		ctx.stroke();
 	}
 }
 
