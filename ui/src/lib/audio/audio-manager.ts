@@ -50,6 +50,7 @@ export class AudioManager {
 
 	private micStream: MediaStream | null = null;
 	private micSource: MediaStreamAudioSourceNode | null = null;
+	private micMuteNode: GainNode | null = null;
 	private txActive = false;
 	private volume = 0.5;
 
@@ -225,22 +226,34 @@ export class AudioManager {
 
 	async startTx(): Promise<void> {
 		if (!this.audioCtx || !this.workletNode) return;
+
+		// Build TX DSP chain first so controls are always available
+		if (!this.txDspChain) {
+			this.txDspChain = new TxDspChain(this.audioCtx);
+			await this.txDspChain.build();
+		}
+
 		try {
 			this.micStream = await navigator.mediaDevices.getUserMedia({
 				audio: { sampleRate: 16000, channelCount: 1, echoCancellation: true },
 				video: false,
 			});
 			this.micSource = this.audioCtx.createMediaStreamSource(this.micStream);
-
-			// Build TX DSP chain and insert between mic source and PCM worklet
-			this.txDspChain = new TxDspChain(this.audioCtx);
-			await this.txDspChain.build();
-			this.micSource.connect(this.txDspChain.input);
+			this.micMuteNode = this.audioCtx.createGain();
+			this.micMuteNode.gain.value = 1;
+			this.micSource.connect(this.micMuteNode);
+			this.micMuteNode.connect(this.txDspChain.input);
 			this.txDspChain.output.connect(this.workletNode);
-
 			this.txActive = true;
 		} catch (e) {
 			console.warn('Mic access denied or unavailable:', e);
+		}
+	}
+
+	/** Mute or unmute the microphone input. PTT/VOX behaviour is unaffected. */
+	setMicMute(muted: boolean): void {
+		if (this.micMuteNode) {
+			this.micMuteNode.gain.value = muted ? 0 : 1;
 		}
 	}
 
@@ -248,6 +261,8 @@ export class AudioManager {
 		this.txActive = false;
 		this.txDspChain?.destroy();
 		this.txDspChain = null;
+		this.micMuteNode?.disconnect();
+		this.micMuteNode = null;
 		this.micSource?.disconnect();
 		this.micSource = null;
 		this.micStream?.getTracks().forEach((t) => t.stop());

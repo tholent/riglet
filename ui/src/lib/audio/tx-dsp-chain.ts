@@ -14,6 +14,7 @@
  */
 
 export type CompressorPreset = 'light' | 'medium' | 'heavy' | 'manual';
+export type LimiterPreset = 'soft' | 'medium' | 'hard' | 'manual';
 
 export interface CompressorPresetParams {
 	threshold: number;
@@ -21,6 +22,19 @@ export interface CompressorPresetParams {
 	attack: number;
 	release: number;
 }
+
+export interface LimiterPresetParams {
+	threshold: number;
+	ratio: number;
+	attack: number;
+	release: number;
+}
+
+export const LIMITER_PRESETS: Record<Exclude<LimiterPreset, 'manual'>, LimiterPresetParams> = {
+	soft:   { threshold: -6,  ratio: 4,  attack: 0.005, release: 0.1  },
+	medium: { threshold: -3,  ratio: 10, attack: 0.002, release: 0.05 },
+	hard:   { threshold: -1,  ratio: 20, attack: 0.001, release: 0.025 },
+};
 
 export const COMPRESSOR_PRESETS: Record<Exclude<CompressorPreset, 'manual'>, CompressorPresetParams> = {
 	light:  { threshold: -20, ratio: 2,  attack: 0.003, release: 0.25 },
@@ -60,6 +74,7 @@ export class TxDspChain {
 	private _compressorEnabled = false;
 	private _compressorPreset: string = 'manual';
 	private _limiterEnabled = false;
+	private _limiterPreset: LimiterPreset = 'medium';
 	private _gateEnabled = false;
 	private _gateThreshold = -60;
 
@@ -313,20 +328,35 @@ export class TxDspChain {
 	// Limiter control (Task 14)
 	// ------------------------------------------------------------------
 
-	/** Set limiter threshold in dBFS. Clamped to -20..0. */
-	setLimiterThreshold(thresholdDb: number): void {
+	/** Apply a named limiter preset. */
+	setLimiterPreset(preset: Exclude<LimiterPreset, 'manual'>): void {
 		if (!this.limiterNode) return;
-		const clamped = Math.max(-20, Math.min(0, thresholdDb));
-		this.limiterNode.threshold.value = clamped;
+		this._limiterPreset = preset;
+		const p = LIMITER_PRESETS[preset];
+		this.limiterNode.threshold.value = p.threshold;
+		this.limiterNode.ratio.value = p.ratio;
+		this.limiterNode.attack.value = p.attack;
+		this.limiterNode.release.value = p.release;
 	}
 
-	/** Enable or disable the limiter. Bypass: ratio=1, threshold=0. */
+	/** Set all limiter parameters manually. */
+	setLimiter(thresholdDb: number, ratio: number, attackS: number, releaseS: number): void {
+		if (!this.limiterNode) return;
+		this._limiterPreset = 'manual';
+		this.limiterNode.threshold.value = Math.max(-20, Math.min(0, thresholdDb));
+		this.limiterNode.ratio.value = Math.max(1, Math.min(20, ratio));
+		this.limiterNode.attack.value = Math.max(0.001, Math.min(0.1, attackS));
+		this.limiterNode.release.value = Math.max(0.01, Math.min(1, releaseS));
+	}
+
+	/** Enable or disable the limiter. When enabling, applies the current preset. */
 	enableLimiter(enabled: boolean): void {
 		if (!this.limiterNode) return;
 		this._limiterEnabled = enabled;
 		if (enabled) {
-			this.limiterNode.threshold.value = -3;
-			this.limiterNode.ratio.value = 20;
+			if (this._limiterPreset !== 'manual') {
+				this.setLimiterPreset(this._limiterPreset);
+			}
 		} else {
 			this.limiterNode.threshold.value = 0;
 			this.limiterNode.ratio.value = 1;
