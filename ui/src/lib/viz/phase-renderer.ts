@@ -51,19 +51,24 @@ export class PhaseRenderer implements Renderer {
 	// ------------------------------------------------------------------
 
 	/**
-	 * Normalized autocorrelation:
-	 *   r = sum(x[i] * x[i+1]) / sum(x[i]^2)
-	 * Clamped to [-1, +1].
+	 * Pearson cross-correlation between the first and second halves of the
+	 * buffer.  Lag-1 autocorrelation is trivially ~+1 for any smooth audio
+	 * at 16 kHz, so it's not useful here.  Comparing two halves of the same
+	 * buffer gives a signal-consistency measure that actually varies with the
+	 * audio content.
 	 */
 	private _computeCorrelation(samples: Float32Array): number {
-		let sumXX = 0;
-		let sumXY = 0;
-		for (let i = 0; i < samples.length - 1; i++) {
-			sumXX += samples[i] * samples[i];
-			sumXY += samples[i] * samples[i + 1];
+		const half = Math.floor(samples.length / 2);
+		if (half === 0) return 0;
+		let sumAB = 0, sumA2 = 0, sumB2 = 0;
+		for (let i = 0; i < half; i++) {
+			sumAB += samples[i] * samples[i + half];
+			sumA2 += samples[i] * samples[i];
+			sumB2 += samples[i + half] * samples[i + half];
 		}
-		if (sumXX === 0) return 0;
-		return Math.max(-1, Math.min(1, sumXY / sumXX));
+		const denom = Math.sqrt(sumA2 * sumB2);
+		if (denom === 0) return 0;
+		return Math.max(-1, Math.min(1, sumAB / denom));
 	}
 
 	// ------------------------------------------------------------------

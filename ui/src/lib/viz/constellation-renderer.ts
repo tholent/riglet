@@ -20,6 +20,10 @@ export class ConstellationRenderer implements Renderer {
 	private ctx: CanvasRenderingContext2D | null = null;
 	private width = 0;
 	private height = 0;
+	// Slow-decay peak tracker so gain adapts across frames rather than
+	// normalising every frame to 90% (which made the display look maxed-out
+	// regardless of signal level).
+	private peakAmplitude = 0.1;
 
 	init(context: RendererContext): void {
 		this.ctx = context.ctx;
@@ -46,15 +50,19 @@ export class ConstellationRenderer implements Renderer {
 		const cy = this.height / 2;
 		const radius = Math.min(cx, cy) * 0.9;
 
-		// Auto-gain: scale so the loudest sample fills ~90% of the radius.
-		// Without this, quiet mic input (amplitudes ~0.01–0.05) clusters all
-		// dots in a tiny region near the centre.
+		// Slowly-adapting peak hold so the display reflects actual signal level
+		// rather than normalising every frame to fill 90% of the radius.
 		let maxAbs = 0;
 		for (let i = 0; i < samples.length; i++) {
 			const a = Math.abs(samples[i]);
 			if (a > maxAbs) maxAbs = a;
 		}
-		const gain = maxAbs > 0.001 ? 0.9 / maxAbs : 1;
+		if (maxAbs > this.peakAmplitude) {
+			this.peakAmplitude = maxAbs;
+		} else {
+			this.peakAmplitude = this.peakAmplitude * 0.97 + maxAbs * 0.03;
+		}
+		const gain = this.peakAmplitude > 0.001 ? 0.9 / this.peakAmplitude : 1;
 
 		ctx.fillStyle = DOT_COLOR;
 		ctx.beginPath();
@@ -77,6 +85,7 @@ export class ConstellationRenderer implements Renderer {
 
 	destroy(): void {
 		this.ctx = null;
+		this.peakAmplitude = 0.1;
 	}
 
 	// ------------------------------------------------------------------
