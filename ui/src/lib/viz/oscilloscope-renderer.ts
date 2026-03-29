@@ -104,8 +104,17 @@ export class OscilloscopeRenderer implements Renderer {
 			else ctx.lineTo(x, y);
 		}
 		ctx.stroke();
-
 		ctx.shadowBlur = 0;
+
+		this._drawLabel(ctx);
+	}
+
+	private _drawLabel(ctx: CanvasRenderingContext2D): void {
+		ctx.fillStyle = 'rgba(150,150,150,0.6)';
+		ctx.font = '10px monospace';
+		ctx.textAlign = 'left';
+		ctx.textBaseline = 'top';
+		ctx.fillText('Oscilloscope', 4, 4);
 	}
 
 	/** Draw graticule (grid) lines. */
@@ -162,6 +171,8 @@ export class OscilloscopeRenderer implements Renderer {
 		ctx.moveTo(0, h / 2);
 		ctx.lineTo(w, h / 2);
 		ctx.stroke();
+
+		this._drawLabel(ctx);
 	}
 }
 

@@ -82,6 +82,7 @@ export class WaterfallRenderer implements Renderer {
 		this._scrollAndDraw(data.fftBins);
 		this._drawAxis();
 		this._drawCursor();
+		this._drawLabel();
 	}
 
 	resize(width: number, height: number): void {
@@ -159,6 +160,15 @@ export class WaterfallRenderer implements Renderer {
 			data[offset + 3] = 255;
 		}
 		this.ctx.putImageData(this.imageData, 0, 0);
+	}
+
+	private _drawLabel(): void {
+		if (!this.ctx) return;
+		this.ctx.fillStyle = 'rgba(150,150,150,0.6)';
+		this.ctx.font = '10px monospace';
+		this.ctx.textAlign = 'left';
+		this.ctx.textBaseline = 'top';
+		this.ctx.fillText('Waterfall', 4, 4);
 	}
 
 	private _drawAxis(): void {

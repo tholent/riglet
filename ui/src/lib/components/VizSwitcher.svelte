@@ -9,7 +9,6 @@
 
 	const MODES: ModeOption[] = [
 		{ mode: 'waterfall', label: 'WF', title: 'Waterfall' },
-		{ mode: 'spectrum', label: 'SP', title: 'Spectrum Scope' },
 		{ mode: 'oscilloscope', label: 'OSC', title: 'Oscilloscope' },
 		{ mode: 'constellation', label: 'CON', title: 'Constellation' },
 		{ mode: 'phase', label: 'PH', title: 'Phase Meter' },

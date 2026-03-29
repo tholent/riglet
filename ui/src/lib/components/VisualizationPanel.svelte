@@ -235,12 +235,18 @@
 		if (samples && renderer) feedFrame(null, samples);
 	});
 
+	// Modes that only use PCM — don't route FFT-only frames to them or they wipe
+	// the waveform every frame with an idle clear.
+	const PCM_ONLY_MODES = new Set<VisualizationMode>(['oscilloscope', 'constellation', 'phase']);
+
 	// Forward external FFT bins (simulation mode: client-side mic FFT)
 	$effect(() => {
 		const bins = fftBins;
 		if (!bins) return;
 		const binsArr = Array.from(bins);
-		if (renderer) renderer.render({ fftBins: binsArr, pcmSamples: null, sampleRate, timestamp: performance.now() } as VisualizationData);
+		if (renderer && !PCM_ONLY_MODES.has(mode)) {
+			renderer.render({ fftBins: binsArr, pcmSamples: null, sampleRate, timestamp: performance.now() } as VisualizationData);
+		}
 		if (spectrumRenderer) spectrumRenderer.render({ fftBins: binsArr, pcmSamples: null, sampleRate, timestamp: performance.now() } as VisualizationData);
 	});
 
