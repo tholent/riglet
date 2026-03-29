@@ -6,10 +6,11 @@
 		step?: number;
 		label?: string;
 		size?: number;
+		defaultValue?: number;
 		onchange?: (v: number) => void;
 		onclick?: () => void;
 	}
-	let { value, min = 0, max = 100, step = 1, label = '', size = 60, onchange, onclick }: Props = $props();
+	let { value, min = 0, max = 100, step = 1, label = '', size = 60, defaultValue, onchange, onclick }: Props = $props();
 
 	let CX = $derived(size / 2);
 	let CY = $derived(size / 2);
@@ -41,6 +42,8 @@
 	let dragMoved = false;
 	let dragStartY = 0;
 	let dragStartVal = 0;
+	let lastClickTime = 0;
+	const DBL_CLICK_MS = 300;
 
 	function clampStep(v: number) {
 		return Math.max(min, Math.min(max, Math.round(v / step) * step));
@@ -61,7 +64,16 @@
 		if (newVal !== value) onchange?.(newVal);
 	}
 	function onPointerUp() {
-		if (!dragMoved) onclick?.();
+		if (!dragMoved) {
+			const now = performance.now();
+			if (defaultValue !== undefined && now - lastClickTime < DBL_CLICK_MS) {
+				onchange?.(defaultValue);
+				lastClickTime = 0;
+			} else {
+				lastClickTime = now;
+				onclick?.();
+			}
+		}
 		dragging = false;
 	}
 
