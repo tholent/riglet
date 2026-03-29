@@ -116,13 +116,15 @@
 		tx.setGateThreshold(cfg.gate_threshold);
 	}
 
-	function handleTxDspChange(detail: { param: string; value: unknown }): void {
-		if (detail.param === 'mic_mute') {
-			audioMgr?.setMicMute(detail.value as boolean);
+	function handleTxDspChange(detail: Record<string, unknown>): void {
+		const param = detail.param as string;
+		const value = detail.value;
+		if (param === 'mic_mute') {
+			audioMgr?.setMicMute(value as boolean);
 			return;
 		}
 		if (!dspPersistence) return;
-		const patch: Partial<TxDspConfig> = { [detail.param]: detail.value } as Partial<TxDspConfig>;
+		const patch: Partial<TxDspConfig> = { [param]: value } as Partial<TxDspConfig>;
 		dspPersistence.saveTx(patch);
 	}
 

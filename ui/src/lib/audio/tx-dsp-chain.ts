@@ -349,6 +349,13 @@ export class TxDspChain {
 		this.limiterNode.release.value = Math.max(0.01, Math.min(1, releaseS));
 	}
 
+	/** Set only the limiter threshold (dBFS), preserving ratio/attack/release. */
+	setLimiterThreshold(thresholdDb: number): void {
+		if (!this.limiterNode) return;
+		this._limiterPreset = 'manual';
+		this.limiterNode.threshold.value = Math.max(-20, Math.min(0, thresholdDb));
+	}
+
 	/** Enable or disable the limiter. When enabling, applies the current preset. */
 	enableLimiter(enabled: boolean): void {
 		if (!this.limiterNode) return;
