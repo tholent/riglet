@@ -226,6 +226,7 @@
 	$effect(() => {
 		const m = mode;
 		if (renderer || rendererContext) mountRenderer(m);
+		if (m !== 'waterfall' && m !== 'spectrogram3d') wfOpen = false;
 	});
 
 	// Forward external PCM to main renderer
@@ -333,8 +334,8 @@
 		<!-- Main visualization canvas -->
 		<canvas bind:this={canvas} class="viz-canvas"></canvas>
 
-		<!-- Waterfall controls popup -->
-		{#if mode === 'waterfall'}
+		<!-- Waterfall / 3D spectrogram controls popup -->
+		{#if mode === 'waterfall' || mode === 'spectrogram3d'}
 		<div class="wf-popup-wrap">
 			<button
 				class="wf-toggle"

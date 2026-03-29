@@ -1,10 +1,11 @@
 /**
  * Spectrogram3dRenderer — 3D perspective freq-time-amplitude waterfall.
  *
- * Renders a scrolling 3D spectrogram using the Canvas 2D API with a simple
- * oblique projection (isometric-style). Each incoming FFT frame is drawn as a
- * filled polyline at decreasing depth, creating a perspective view of the
- * spectrum over time.
+ * Uses a one-point perspective projection with the vanishing point centered
+ * horizontally and the horizon lifted to ~20% from the top, giving a
+ * slightly top-down birds-eye view of the spectrum history.
+ *
+ * Newest frames are at the front (bottom); oldest recede toward the horizon.
  *
  * Registered in the RendererRegistry as 'spectrogram3d'.
  */
@@ -13,21 +14,28 @@ import { registerRenderer } from './base-renderer.js';
 import type { Renderer, RendererContext, VisualizationData } from './types.js';
 
 /** Maximum number of history frames to keep and render. */
-const MAX_FRAMES = 48;
+const MAX_FRAMES = 60;
 
-/** Oblique projection offsets per depth step (in CSS pixels). */
-const DEPTH_DX = 2.5; // shift right per step back
-const DEPTH_DY = 1.8; // shift up per step back
+/** Horizon as a fraction of canvas height from the top (lower = more top-down). */
+const HORIZON_FRAC = 0.20;
+
+/** How far toward the horizon the oldest frame sits (0=front, 1=exactly at horizon). */
+const DEPTH_FRAC = 0.88;
+
+/** Convert a raw bin value (dBFS or normalised [0,1]) to [0,1] using the dB window. */
+function normalizeBin(v: number, floorDb: number, ceilDb: number): number {
+	const db = v < 0 ? v : v > 0 ? 20 * Math.log10(v) : -160;
+	return Math.max(0, Math.min(1, (db - floorDb) / (ceilDb - floorDb)));
+}
 
 function binColor(amplitude: number, alpha: number): string {
-	// amplitude is normalised 0..1
 	const a = Math.max(0, Math.min(1, amplitude));
 	if (a < 0.5) {
 		const t = a * 2;
-		return `rgba(${Math.round(t * 0)},${Math.round(50 + t * 180)},${Math.round(200 - t * 200)},${alpha})`;
+		return `rgba(0,${Math.round(50 + t * 180)},${Math.round(200 - t * 200)},${alpha.toFixed(2)})`;
 	} else {
 		const t = (a - 0.5) * 2;
-		return `rgba(${Math.round(t * 255)},${Math.round(230 - t * 100)},0,${alpha})`;
+		return `rgba(${Math.round(t * 255)},${Math.round(230 - t * 100)},0,${alpha.toFixed(2)})`;
 	}
 }
 
@@ -36,8 +44,16 @@ export class Spectrogram3dRenderer implements Renderer {
 	private width = 0;
 	private height = 0;
 
-	/** Ring buffer of normalised FFT frames (newest at index 0). */
+	/** Ring buffer of normalised [0,1] FFT frames (index 0 = newest). */
 	private frames: Float32Array[] = [];
+
+	// Speed control
+	private frameSkip = 1;
+	private frameCount = 0;
+
+	// dB window for color/amplitude mapping
+	private floorDb = -100;
+	private ceilDb = 0;
 
 	init(context: RendererContext): void {
 		this.ctx = context.ctx;
@@ -49,18 +65,20 @@ export class Spectrogram3dRenderer implements Renderer {
 
 	render(data: VisualizationData): void {
 		if (!this.ctx) return;
+
 		if (data.fftBins && data.fftBins.length > 0) {
-			const bins = data.fftBins;
-			// Normalise to [0, 1] assuming input range of approximately -120..0 dB
-			const norm = new Float32Array(bins.length);
-			for (let i = 0; i < bins.length; i++) {
-				norm[i] = Math.max(0, Math.min(1, (bins[i] + 120) / 120));
-			}
-			this.frames.unshift(norm);
-			if (this.frames.length > MAX_FRAMES) {
-				this.frames.length = MAX_FRAMES;
+			this.frameCount++;
+			if (this.frameCount % this.frameSkip === 0) {
+				const bins = data.fftBins;
+				const norm = new Float32Array(bins.length);
+				for (let i = 0; i < bins.length; i++) {
+					norm[i] = normalizeBin(bins[i], this.floorDb, this.ceilDb);
+				}
+				this.frames.unshift(norm);
+				if (this.frames.length > MAX_FRAMES) this.frames.length = MAX_FRAMES;
 			}
 		}
+
 		this._drawScene();
 	}
 
@@ -75,8 +93,23 @@ export class Spectrogram3dRenderer implements Renderer {
 		this.frames = [];
 	}
 
+	/** Frames to skip between rendered rows (1 = fastest, 8 = slowest). */
+	setSpeed(framesPerRow: number): void {
+		this.frameSkip = Math.max(1, Math.round(framesPerRow));
+	}
+
+	/** dB window: energy below floorDb → black; at/above ceilDb → full color. */
+	setRange(floorDb: number, ceilDb: number): void {
+		this.floorDb = floorDb;
+		this.ceilDb = Math.max(floorDb + 1, ceilDb);
+		// Re-normalise all cached frames with the new window
+		// (frames were stored pre-normalised; we'd need raw data to re-normalise accurately,
+		// so just clear history — new frames will use the updated range)
+		this.frames = [];
+	}
+
 	// ------------------------------------------------------------------
-	// Helpers
+	// Private helpers
 	// ------------------------------------------------------------------
 
 	private _clear(): void {
@@ -92,60 +125,64 @@ export class Spectrogram3dRenderer implements Renderer {
 		const h = this.height;
 
 		this._clear();
-
 		if (this.frames.length === 0) return;
 
 		const numFrames = this.frames.length;
-		const bins = this.frames[0].length;
 
-		// The most-recent frame is drawn at the front (largest y, no depth offset).
-		// Each older frame is shifted up-right by DEPTH_DX/DEPTH_DY.
-		const totalDepthX = DEPTH_DX * (numFrames - 1);
-		const totalDepthY = DEPTH_DY * (numFrames - 1);
+		// One-point perspective geometry
+		const vanishX = w / 2;
+		const vanishY = h * HORIZON_FRAC;
+		const frontY = h - 4;
+		const margin = 6;
+		const frontLeft = margin;
+		const frontRight = w - margin;
 
-		// Front-frame baseline: bottom-centre of the drawable area
-		const baselineY = h * 0.85 - totalDepthY;
-		const plotLeft = 10;
-		const plotRight = w - 10 - totalDepthX;
-		const plotWidth = Math.max(1, plotRight - plotLeft);
-		const plotHeight = (h - 20 - totalDepthY) * 0.7;
+		// Maximum amplitude height for the front frame
+		const maxAmpH = (frontY - vanishY) * 0.55;
 
-		// Draw oldest frames first so newer frames paint on top
+		// Draw oldest frames first (painter's algorithm: back → front)
 		for (let fi = numFrames - 1; fi >= 0; fi--) {
 			const frame = this.frames[fi];
-			const depthX = DEPTH_DX * fi;
-			const depthY = DEPTH_DY * fi;
-			const alpha = 0.35 + 0.65 * (fi / Math.max(1, numFrames - 1));
-
-			// Build a filled polygon for the frame
 			const binCount = frame.length;
-			const xStep = plotWidth / Math.max(1, binCount - 1);
 
+			// Depth fraction: 0 = newest/front, DEPTH_FRAC = oldest/back
+			const d = (fi / Math.max(1, numFrames - 1)) * DEPTH_FRAC;
+
+			// Perspective-projected edges for this frame
+			const leftX  = frontLeft  + (vanishX - frontLeft)  * d;
+			const rightX = frontRight + (vanishX - frontRight) * d;
+			const baseY  = frontY     - (frontY  - vanishY)    * d;
+			const ampH   = maxAmpH * (1 - d);
+
+			// Newer frames are more opaque
+			const alpha = 0.15 + 0.85 * (1 - fi / Math.max(1, numFrames - 1));
+
+			const frameW = rightX - leftX;
+
+			// Build filled polygon: baseline → spectrum trace → back to baseline
 			ctx.beginPath();
-			// Start at bottom-left of this frame
-			ctx.moveTo(plotLeft + depthX, baselineY + depthY);
+			ctx.moveTo(leftX, baseY);
 
 			for (let bi = 0; bi < binCount; bi++) {
-				const px = plotLeft + depthX + bi * xStep;
-				const py = baselineY + depthY - frame[bi] * plotHeight;
+				const px = leftX + (bi / Math.max(1, binCount - 1)) * frameW;
+				const py = baseY - frame[bi] * ampH;
 				ctx.lineTo(px, py);
 			}
 
-			// Close back to baseline
-			ctx.lineTo(plotLeft + depthX + (binCount - 1) * xStep, baselineY + depthY);
+			ctx.lineTo(rightX, baseY);
 			ctx.closePath();
 
-			// Fill with a gradient or solid colour based on the average amplitude
-			const avg = frame.reduce((s, v) => s + v, 0) / Math.max(1, frame.length);
-			ctx.fillStyle = binColor(avg, alpha * 0.6);
+			// Fill: use average amplitude for the overall color, keep mostly opaque
+			const avg = frame.reduce((s, v) => s + v, 0) / Math.max(1, binCount);
+			ctx.fillStyle = binColor(avg, alpha * 0.45);
 			ctx.fill();
 
-			// Stroke the top edge with per-bin colour
+			// Per-bin color on the spectrum ridge
 			for (let bi = 0; bi < binCount - 1; bi++) {
-				const x1 = plotLeft + depthX + bi * xStep;
-				const y1 = baselineY + depthY - frame[bi] * plotHeight;
-				const x2 = plotLeft + depthX + (bi + 1) * xStep;
-				const y2 = baselineY + depthY - frame[bi + 1] * plotHeight;
+				const x1 = leftX + (bi       / Math.max(1, binCount - 1)) * frameW;
+				const y1 = baseY - frame[bi]     * ampH;
+				const x2 = leftX + ((bi + 1) / Math.max(1, binCount - 1)) * frameW;
+				const y2 = baseY - frame[bi + 1] * ampH;
 				ctx.beginPath();
 				ctx.moveTo(x1, y1);
 				ctx.lineTo(x2, y2);
@@ -154,13 +191,6 @@ export class Spectrogram3dRenderer implements Renderer {
 				ctx.stroke();
 			}
 		}
-
-		// Draw axis label
-		ctx.fillStyle = 'rgba(150,150,150,0.6)';
-		ctx.font = '10px monospace';
-		ctx.textAlign = 'left';
-		ctx.textBaseline = 'top';
-		ctx.fillText('3D Spectrogram', 4, 4);
 	}
 }
 
