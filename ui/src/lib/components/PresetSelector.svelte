@@ -1,15 +1,16 @@
 <script lang="ts">
 	import type { ControlWebSocket } from '$lib/websocket.js';
 	import type { PresetConfig } from '$lib/types.js';
-	import { getPresets, createPreset, importPresets, exportPresets } from '$lib/api.js';
+	import { getPresets, createPreset, deletePreset, importPresets, exportPresets } from '$lib/api.js';
 	import { onMount } from 'svelte';
 
 	interface Props {
 		radioId: string;
 		currentFreqMhz: number;
 		controlWs: ControlWebSocket | null;
+		onPresetsChange?: (presets: PresetConfig[]) => void;
 	}
-	let { radioId, currentFreqMhz, controlWs }: Props = $props();
+	let { radioId, currentFreqMhz, controlWs, onPresetsChange }: Props = $props();
 
 	let presets = $state<PresetConfig[]>([]);
 	let loading = $state(false);
@@ -22,6 +23,7 @@
 		try {
 			const result = await getPresets();
 			presets = result.presets;
+			onPresetsChange?.(presets);
 		} catch (e) {
 			error = 'Failed to load presets';
 			console.error('[PresetSelector]', e);
@@ -73,6 +75,7 @@
 		try {
 			const result = await createPreset(preset);
 			presets = result.presets;
+			onPresetsChange?.(presets);
 		} catch (e) {
 			alert('Failed to save preset');
 			console.error('[PresetSelector]', e);
@@ -96,12 +99,24 @@
 			}
 			const result = await importPresets(data.presets);
 			presets = result.presets;
+			onPresetsChange?.(presets);
 		} catch (e) {
 			alert('Failed to import presets');
 			console.error('[PresetSelector]', e);
 		} finally {
 			// Reset so the same file can be re-imported
 			(e.target as HTMLInputElement).value = '';
+		}
+	}
+
+	async function removePreset(preset: PresetConfig) {
+		try {
+			const result = await deletePreset(preset.id);
+			presets = result.presets;
+			onPresetsChange?.(presets);
+		} catch (e) {
+			alert('Failed to delete preset');
+			console.error('[PresetSelector]', e);
 		}
 	}
 
@@ -174,14 +189,21 @@
 				<div class="band-group">
 					<span class="band-label">{band}</span>
 					{#each presetsByBand().get(band) ?? [] as preset}
-						<button
-							class="preset-item"
-							onclick={() => selectPreset(preset)}
-							aria-label={`Tune to preset ${preset.name} at ${preset.frequency_mhz} MHz`}
-						>
-							<span class="preset-name">{preset.name}</span>
-							<span class="preset-freq">{preset.frequency_mhz.toFixed(3)}</span>
-						</button>
+						<div class="preset-row">
+							<button
+								class="preset-item"
+								onclick={() => selectPreset(preset)}
+								aria-label={`Tune to preset ${preset.name} at ${preset.frequency_mhz} MHz`}
+							>
+								<span class="preset-name">{preset.name}</span>
+								<span class="preset-freq">{preset.frequency_mhz.toFixed(3)}</span>
+							</button>
+							<button
+								class="delete-btn"
+								onclick={() => removePreset(preset)}
+								aria-label={`Delete preset ${preset.name}`}
+							>✕</button>
+						</div>
 					{/each}
 				</div>
 			{/each}
@@ -254,7 +276,44 @@
 		letter-spacing: 0.05em;
 	}
 
+	.preset-row {
+		display: flex;
+		align-items: center;
+		gap: 3px;
+	}
+
+	.preset-row .delete-btn {
+		flex-shrink: 0;
+		width: 20px;
+		height: 20px;
+		padding: 0;
+		background: none;
+		border: 1px solid transparent;
+		border-radius: 3px;
+		color: #444;
+		cursor: pointer;
+		font-size: 0.65rem;
+		opacity: 0;
+		transition: opacity 0.1s, color 0.1s, border-color 0.1s;
+	}
+
+	.preset-row:hover .delete-btn {
+		opacity: 1;
+	}
+
+	.preset-row .delete-btn:hover {
+		color: #f44336;
+		border-color: #f44336;
+	}
+
+	.preset-row .delete-btn:focus-visible {
+		opacity: 1;
+		outline: 2px solid #4a9eff;
+		outline-offset: 2px;
+	}
+
 	.preset-item {
+		flex: 1;
 		display: flex;
 		justify-content: space-between;
 		align-items: center;
@@ -266,6 +325,7 @@
 		cursor: pointer;
 		text-align: left;
 		font-size: 0.8rem;
+		min-width: 0;
 	}
 
 	.preset-item:hover {
