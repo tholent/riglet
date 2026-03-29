@@ -72,12 +72,6 @@
 		aria-label="Frequency control"
 		use:scrollWheel={{ onDelta: (d) => nudge(d as 1 | -1) }}
 	>
-		<button
-			class="nudge"
-			onclick={() => nudge(-1)}
-			aria-label="Tune down 1 kHz"
-		>−</button>
-
 		{#if editing}
 			<!-- svelte-ignore a11y_autofocus -->
 			<input
@@ -94,55 +88,71 @@
 				class="freq-display"
 				onclick={startEdit}
 				onkeydown={onDisplayKeydown}
-				aria-label={`Frequency ${formatFreq(freq)} MHz. Press Enter to edit, arrow keys to nudge.`}
+				aria-label={`Frequency ${formatFreq(freq)} MHz${activePreset ? ` — ${activePreset.name}` : ''}. Press Enter to edit, arrow keys to nudge.`}
 				aria-live="polite"
 				aria-atomic="true"
 			>
-				{formatFreq(freq)}<span class="unit"> MHz</span>
+				<span class="freq-line">{formatFreq(freq)}<span class="unit"> MHz</span></span>
+				<span class="preset-line" class:active={!!activePreset}>
+					{activePreset?.name ?? '<none>'}
+				</span>
 			</button>
 		{/if}
 
-		<button
-			class="nudge"
-			onclick={() => nudge(1)}
-			aria-label="Tune up 1 kHz"
-		>+</button>
 	</div>
-
-	{#if activePreset}
-		<span class="preset-label" aria-label={`Active preset: ${activePreset.name}`}>
-			{activePreset.name}
-		</span>
-	{/if}
 </div>
 
 <style>
 	.freq-wrap {
-		display: inline-flex;
+		display: flex;
 		flex-direction: column;
-		align-items: flex-start;
+		align-items: center;
+		width: 100%;
 		gap: 2px;
 	}
 
 	.freq-row {
-		display: inline-flex;
+		display: flex;
 		align-items: center;
-		gap: 6px;
+		justify-content: center;
 	}
 
 	.freq-display {
-		font-size: 3.5rem;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		font-size: 4rem;
 		font-family: 'Courier New', monospace;
 		font-weight: 700;
 		color: #4cff8a;
 		background: #0a0a0a;
 		border: 1px solid #333;
 		border-radius: 4px;
-		padding: 4px 12px;
+		padding: 4px 12px 8px;
 		cursor: pointer;
 		letter-spacing: 0.02em;
 		white-space: nowrap;
 		line-height: 1;
+	}
+
+	.freq-line {
+		display: block;
+	}
+
+	.preset-line {
+		display: block;
+		width: 100%;
+		text-align: left;
+		font-size: 1rem;
+		font-weight: 400;
+		color: #555;
+		letter-spacing: 0.04em;
+		margin-top: 4px;
+		line-height: 1;
+	}
+
+	.preset-line.active {
+		color: #4cff8a;
 	}
 
 	.freq-display:hover {
@@ -161,7 +171,7 @@
 	}
 
 	.freq-input {
-		font-size: 3.5rem;
+		font-size: 4rem;
 		font-family: 'Courier New', monospace;
 		font-weight: 700;
 		color: #4cff8a;
@@ -174,38 +184,8 @@
 		min-width: 260px;
 	}
 
-	.nudge {
-		font-size: 1.4rem;
-		width: 36px;
-		height: 36px;
-		background: #1a1a1a;
-		border: 1px solid #444;
-		border-radius: 4px;
-		color: #ccc;
-		cursor: pointer;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		padding: 0;
-		flex-shrink: 0;
-	}
-
-	.nudge:hover { background: #2a2a2a; border-color: #666; }
-
-	.nudge:focus-visible {
-		outline: 2px solid #4a9eff;
-		outline-offset: 2px;
-	}
-
-	.preset-label {
-		font-size: 0.78rem;
-		color: var(--color-text-muted, #888);
-		padding-left: 52px; /* align under the freq display (past the nudge button + gap) */
-		font-style: italic;
-	}
-
 	@media (prefers-reduced-motion: reduce) {
-		.nudge, .freq-display {
+		.freq-display {
 			transition: none;
 		}
 	}
