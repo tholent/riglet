@@ -96,7 +96,7 @@
 	.band-pill {
 		padding: 4px 10px;
 		border: 1px solid #444;
-		border-radius: 12px;
+		border-radius: 4px;
 		background: #1a1a1a;
 		color: #aaa;
 		font-size: 0.8rem;
