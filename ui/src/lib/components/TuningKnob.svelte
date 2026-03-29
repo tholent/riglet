@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { untrack } from 'svelte';
 	import type { ControlWebSocket } from '$lib/websocket.js';
 
 	interface Props {
@@ -17,7 +18,7 @@
 
 	// Local frequency mirror — updated immediately on input so rapid dragging
 	// accumulates correctly rather than stacking on a stale prop value.
-	let localFreq = $state(freq);
+	let localFreq = $state(untrack(() => freq));
 	let isDragging = $state(false);
 	$effect(() => { if (!isDragging) localFreq = freq; });
 
@@ -146,7 +147,7 @@
 		<circle cx={pointerTip.x} cy={pointerTip.y} r="3.5" fill="#4a9eff" />
 
 		<!-- Centre cap (click to cycle step) -->
-		<circle cx={CX} cy={CY} r={R_CAP} fill="#111" stroke="#3a3a3a" stroke-width="1" style="cursor:pointer" onpointerdown={(e) => { e.stopPropagation(); cycleStep(); }} />
+		<circle cx={CX} cy={CY} r={R_CAP} fill="#111" stroke="#3a3a3a" stroke-width="1" style="cursor:pointer" role="button" tabindex="-1" aria-label="Cycle tuning step" onpointerdown={(e) => { e.stopPropagation(); cycleStep(); }} />
 		<!-- Step label in centre -->
 		<text
 			x={CX} y={CY + 1}

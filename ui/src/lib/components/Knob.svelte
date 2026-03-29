@@ -11,8 +11,9 @@
 	}
 	let { value, min = 0, max = 100, step = 1, label = '', size = 60, onchange, onclick }: Props = $props();
 
-	const CX = size / 2, CY = size / 2;
-	const R = size * 0.37;
+	let CX = $derived(size / 2);
+	let CY = $derived(size / 2);
+	let R = $derived(size * 0.37);
 	// SVG arc: start 135° (7:30 position), sweep 270° clockwise to 45° (4:30)
 	const START_DEG = 135;
 	const SWEEP_DEG = 270;
@@ -36,7 +37,7 @@
 	let trackEndDeg = START_DEG + SWEEP_DEG; // 45°
 	let dot = $derived(polarXY(valueDeg, R * 0.62));
 
-	let dragging = false;
+	let dragging = $state(false);
 	let dragMoved = false;
 	let dragStartY = 0;
 	let dragStartVal = 0;

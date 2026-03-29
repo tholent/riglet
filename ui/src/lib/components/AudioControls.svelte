@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { untrack } from 'svelte';
 	import { postAudioVolume } from '$lib/api.js';
 	import type { AudioManager } from '$lib/audio/audio-manager.js';
 	import Knob from './Knob.svelte';
@@ -11,8 +12,8 @@
 	}
 	let { radioId, rxVolume = 50, txGain = 50, audioManager }: Props = $props();
 
-	let localRx = $state(rxVolume);
-	let localTx = $state(txGain);
+	let localRx = $state(untrack(() => rxVolume));
+	let localTx = $state(untrack(() => txGain));
 	let muted = $state(false);
 
 	$effect(() => { localRx = rxVolume; });
