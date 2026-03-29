@@ -12,7 +12,7 @@ import { registerRenderer } from './base-renderer.js';
 import type { Renderer, RendererContext, VisualizationData } from './types.js';
 import { computePassband, drawPassbandOverlay } from './cursor.js';
 
-const AXIS_HEIGHT = 28;
+const AXIS_HEIGHT = 20;
 
 /** Map a magnitude value to an RGB triple using a floor/ceiling dB window.
  *  Accepts normalised [0,1] (from server) or raw dBFS (< 0) from getFloatFrequencyData. */
@@ -62,6 +62,10 @@ export class WaterfallRenderer implements Renderer {
 	private floorDb = -100;
 	private ceilDb = 0;
 
+	// Audio-frequency fallback (used when no RF freq metadata is available)
+	private sampleRate = 16000;
+	private numBins = 0;
+
 	init(context: RendererContext): void {
 		this.ctx = context.ctx;
 		this.width = context.width;
@@ -70,11 +74,15 @@ export class WaterfallRenderer implements Renderer {
 		this.centerMhz = context.centerMhz;
 		this.spanKhz = context.spanKhz;
 		this.radioMode = context.mode;
+		this._drawIdleState();
 	}
 
 	render(data: VisualizationData): void {
 		if (!this.ctx || !this.imageData) return;
 		if (!data.fftBins) return;
+
+		if (data.sampleRate) this.sampleRate = data.sampleRate;
+		this.numBins = data.fftBins.length;
 
 		this.frameCount++;
 		if (this.frameCount % this.frameSkip !== 0) return;
@@ -89,6 +97,7 @@ export class WaterfallRenderer implements Renderer {
 		this.width = width;
 		this.waterfallHeight = Math.max(1, height - AXIS_HEIGHT);
 		this._allocImageData();
+		this._drawIdleState();
 	}
 
 	/** Called by VisualizationPanel when freq metadata updates. */
@@ -124,6 +133,13 @@ export class WaterfallRenderer implements Renderer {
 	// ------------------------------------------------------------------
 	// Private helpers
 	// ------------------------------------------------------------------
+
+	private _drawIdleState(): void {
+		if (!this.ctx || !this.imageData) return;
+		this.ctx.putImageData(this.imageData, 0, 0);
+		this._drawAxis();
+		this._drawLabel();
+	}
 
 	private _allocImageData(): void {
 		if (!this.ctx) return;
@@ -181,7 +197,25 @@ export class WaterfallRenderer implements Renderer {
 		ctx.fillStyle = '#0d0d0d';
 		ctx.fillRect(0, axisY, w, AXIS_HEIGHT);
 
-		if (this.centerMhz === 0 || this.spanKhz === 0 || w === 0) return;
+		if (this.centerMhz === 0 || this.spanKhz === 0 || w === 0) {
+			// Fallback: audio frequency axis (simulation / no hardware)
+			if (this.numBins === 0) return;
+			const nyquistKhz = this.sampleRate / 2000;
+			const ticks = [0, 0.25, 0.5, 0.75, 1.0];
+			ctx.font = '9px monospace';
+			ctx.textBaseline = 'top';
+			for (const t of ticks) {
+				const x = t * w;
+				const freqKhz = t * nyquistKhz;
+				const label = freqKhz >= 1 ? `${freqKhz.toFixed(1)}k` : `${Math.round(freqKhz * 1000)}`;
+				ctx.fillStyle = '#555';
+				ctx.fillRect(Math.round(x === w ? x - 1 : x), axisY, 1, 4);
+				ctx.fillStyle = '#888';
+				ctx.textAlign = t === 0 ? 'left' : t === 1 ? 'right' : 'center';
+				ctx.fillText(label, x, axisY + 6);
+			}
+			return;
+		}
 
 		const halfSpanMhz = this.spanKhz / 2000;
 		const startMhz = this.centerMhz - halfSpanMhz;

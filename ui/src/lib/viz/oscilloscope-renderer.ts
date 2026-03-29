@@ -15,7 +15,6 @@ import type { Renderer, RendererContext, VisualizationData } from './types.js';
 
 const H_DIVS = 10;
 const V_DIVS = 8;
-const DISPLAY_SAMPLES = 512;
 const AXIS_HEIGHT = 20;
 
 export class OscilloscopeRenderer implements Renderer {
@@ -23,6 +22,8 @@ export class OscilloscopeRenderer implements Renderer {
 	private width = 0;
 	private height = 0;
 	private sampleRate = 16000;
+	private displaySamples = 512;
+	private gain = 1.0;
 
 	init(context: RendererContext): void {
 		this.ctx = context.ctx;
@@ -52,6 +53,16 @@ export class OscilloscopeRenderer implements Renderer {
 		this.ctx = null;
 	}
 
+	/** Number of samples to display (controls the X / time window). */
+	setTimeScale(samples: number): void {
+		this.displaySamples = Math.max(64, Math.round(samples));
+	}
+
+	/** Amplitude gain multiplier (controls the Y scale). */
+	setGain(gain: number): void {
+		this.gain = Math.max(0.1, gain);
+	}
+
 	// ------------------------------------------------------------------
 	// Private helpers
 	// ------------------------------------------------------------------
@@ -61,7 +72,7 @@ export class OscilloscopeRenderer implements Renderer {
 	}
 
 	private _findTrigger(samples: Float32Array): number {
-		const searchEnd = Math.min(samples.length - DISPLAY_SAMPLES, samples.length >> 1);
+		const searchEnd = Math.min(samples.length - this.displaySamples, samples.length >> 1);
 		for (let i = 1; i < searchEnd; i++) {
 			if (samples[i - 1] < 0 && samples[i] >= 0) return i;
 		}
@@ -78,7 +89,7 @@ export class OscilloscopeRenderer implements Renderer {
 		ctx.fillRect(0, 0, w, ph);
 		this._drawGraticule(ctx, w, ph);
 
-		const count = Math.min(DISPLAY_SAMPLES, samples.length - offset);
+		const count = Math.min(this.displaySamples, samples.length - offset);
 		if (count < 2) return;
 
 		const midY = ph / 2;
@@ -91,7 +102,7 @@ export class OscilloscopeRenderer implements Renderer {
 		ctx.beginPath();
 		for (let i = 0; i < count; i++) {
 			const x = (i / (count - 1)) * w;
-			const y = midY - samples[offset + i] * scaleY * 0.8;
+			const y = midY - samples[offset + i] * scaleY * 0.8 * this.gain;
 			if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
 		}
 		ctx.stroke();
@@ -145,7 +156,7 @@ export class OscilloscopeRenderer implements Renderer {
 		ctx.fillStyle = '#0d0d0d';
 		ctx.fillRect(0, axisY, w, AXIS_HEIGHT);
 
-		const totalMs = (DISPLAY_SAMPLES / this.sampleRate) * 1000;
+		const totalMs = (this.displaySamples / this.sampleRate) * 1000;
 
 		// Pick a round tick interval giving ~4-6 ticks
 		const candidates = [1, 2, 5, 10, 20, 50];

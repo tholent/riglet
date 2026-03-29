@@ -66,7 +66,7 @@ export class Spectrogram3dRenderer implements Renderer {
 		this.width = context.width;
 		this.height = context.height;
 		this.frames = [];
-		this._clear();
+		this._drawScene();
 	}
 
 	render(data: VisualizationData): void {
@@ -144,7 +144,7 @@ export class Spectrogram3dRenderer implements Renderer {
 		// One-point perspective geometry (defined early so axis can use it)
 		const vanishX = w / 2;
 		const vanishY = h * HORIZON_FRAC;
-		const frontY = h - 4;
+		const frontY = h - 20; // bottom 20 px reserved for frequency-axis labels
 		const margin = 6;
 		const frontLeft = margin;
 		const frontRight = w - margin;
