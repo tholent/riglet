@@ -99,17 +99,12 @@ async def ws_waterfall(websocket: WebSocket, radio_id: str) -> None:
         nonlocal ring_buffer
 
         if simulation:
+            # Simulation mode: the client feeds its own mic-based FFT via the
+            # onSimFftBins callback.  Sending random noise here would pollute the
+            # waterfall with spurious horizontal lines, so just hold the socket
+            # open silently until the client disconnects.
             while True:
-                bins: list[float] = np.random.uniform(0.0, 1.0, _FFT_BINS).tolist()
-                await websocket.send_json(
-                    {
-                        "type": "fft",
-                        "bins": bins,
-                        "center_mhz": radio.freq,
-                        "span_khz": 48.0,
-                    }
-                )
-                await asyncio.sleep(_FRAME_INTERVAL)
+                await asyncio.sleep(1.0)
             return
 
         assert capture_proc is not None
