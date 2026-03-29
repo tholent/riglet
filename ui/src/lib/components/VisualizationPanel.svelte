@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import LufsMeter from '$lib/components/LufsMeter.svelte';
+	import SmeterDisplay from '$lib/components/SmeterDisplay.svelte';
 	import VizSwitcher from '$lib/components/VizSwitcher.svelte';
 	import type { VisualizationMode } from '$lib/viz/types.js';
 	import type { Renderer, RendererContext, VisualizationData } from '$lib/viz/types.js';
@@ -22,6 +22,7 @@
 	interface Props {
 		mode: VisualizationMode;
 		radioId: string;
+		smeter?: number;
 		pcmSamples?: Float32Array | null;
 		/** External FFT bins (e.g. from client-side mic FFT in simulation mode). When provided,
 		 *  fed to renderers instead of waiting for the waterfall WebSocket. */
@@ -34,6 +35,7 @@
 	let {
 		mode = $bindable('waterfall' as VisualizationMode),
 		radioId,
+		smeter = 0,
 		pcmSamples = null,
 		fftBins = null,
 		sampleRate = 16000,
@@ -97,23 +99,23 @@
 	});
 
 	// ---------------------------------------------------------------------------
-	// LUFS position (left / right)
+	// S-meter sidebar position (left / right)
 	// ---------------------------------------------------------------------------
-	const LUFS_POSITION_KEY = 'riglet:lufsPosition';
-	type LufsPosition = 'left' | 'right';
+	const SMETER_POSITION_KEY = 'riglet:smeterPosition';
+	type SmeterPosition = 'left' | 'right';
 
-	function loadLufsPosition(): LufsPosition {
+	function loadSmeterPosition(): SmeterPosition {
 		try {
-			const v = localStorage.getItem(LUFS_POSITION_KEY);
+			const v = localStorage.getItem(SMETER_POSITION_KEY);
 			return v === 'left' ? 'left' : 'right';
 		} catch { return 'right'; }
 	}
 
-	let lufsPosition = $state<LufsPosition>(loadLufsPosition());
+	let smeterPosition = $state<SmeterPosition>(loadSmeterPosition());
 
-	function toggleLufsPosition() {
-		lufsPosition = lufsPosition === 'right' ? 'left' : 'right';
-		try { localStorage.setItem(LUFS_POSITION_KEY, lufsPosition); } catch { /* ignore */ }
+	function toggleSmeterPosition() {
+		smeterPosition = smeterPosition === 'right' ? 'left' : 'right';
+		try { localStorage.setItem(SMETER_POSITION_KEY, smeterPosition); } catch { /* ignore */ }
 	}
 
 	// ---------------------------------------------------------------------------
@@ -190,7 +192,11 @@
 							(renderer as WaterfallRenderer).updateFreq(centerMhz, spanKhz);
 						}
 					}
+					// In simulation mode the client provides its own mic FFT via the
+				// fftBins prop — skip WS frames so they don't overwrite it.
+				if (!fftBins) {
 					feedFrame(msg.bins, null);
+				}
 				}
 			} catch { /* ignore */ }
 		};
@@ -359,10 +365,10 @@
 </div>
 
 <div class="viz-outer" role="img" aria-label="Visualization panel">
-	{#if lufsPosition === 'left'}
+	{#if smeterPosition === 'left'}
 		<div class="lufs-col lufs-left">
-			<button class="lufs-toggle" onclick={toggleLufsPosition} title="Move LUFS meter to right" aria-label="Move LUFS meter to right">▶</button>
-			<LufsMeter {pcmSamples} fillHeight />
+			<button class="lufs-toggle" onclick={toggleSmeterPosition} title="Move S-meter to right" aria-label="Move S-meter to right">▶</button>
+			<SmeterDisplay {smeter} fillHeight />
 		</div>
 	{/if}
 
@@ -422,10 +428,10 @@
 		{/if}
 	</div>
 
-	{#if lufsPosition === 'right'}
+	{#if smeterPosition === 'right'}
 		<div class="lufs-col">
-			<button class="lufs-toggle" onclick={toggleLufsPosition} title="Move LUFS meter to left" aria-label="Move LUFS meter to left">◀</button>
-			<LufsMeter {pcmSamples} fillHeight />
+			<button class="lufs-toggle" onclick={toggleSmeterPosition} title="Move S-meter to left" aria-label="Move S-meter to left">◀</button>
+			<SmeterDisplay {smeter} fillHeight />
 		</div>
 	{/if}
 </div><!-- /.viz-outer -->
