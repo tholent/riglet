@@ -91,26 +91,134 @@ Optional client-side companion
 
 ## Security Model
 
-### Current State: No Authentication
+### Authentication Design: Session-Cookie Password Auth
 
-Riglet currently has **no authentication or authorization layer**. The entire API surface -- including PTT control, frequency changes, configuration writes, and service restarts -- is accessible to any device on the LAN without credentials.
+Riglet uses a single shared password to protect the entire application. There are no user accounts, roles, or registration -- just one password that grants full access. This is appropriate for a single-operator, LAN-only deployment where the operator is the only person who should be controlling the radio.
 
-This is the most significant architectural gap in the system. While Riglet is designed as a LAN-only application on a private network, the threat surface is real:
+#### Threat Model
+
+Even on a private LAN, unauthenticated access creates real risk:
 
 - Any device on the network can key the transmitter (FCC regulatory implications for unauthorized transmission)
 - Configuration can be overwritten or corrupted by any LAN client
 - Service restarts can be triggered arbitrarily, disrupting active operation
 
-The `itsdangerous` package is listed as a dependency but never used, indicating authentication was planned but not implemented.
+#### Password Storage
 
-### Planned Approach
+The password hash is stored in a **separate secrets file** at `~/.config/riglet/secrets.yaml` (dev) or `/etc/riglet/secrets.yaml` (production), respecting a `RIGLET_SECRETS` environment variable override. Rationale for keeping it separate from `config.yaml`:
 
-Authentication should be lightweight and appropriate for the single-operator, LAN-only deployment model. A token-based approach using `itsdangerous` (already a dependency) is the natural fit:
+- The config file is exported, imported, and displayed in the UI. A password hash in config risks accidental exposure.
+- The secrets file has a focused responsibility and can have tighter filesystem permissions (mode 0600).
+- The config schema remains clean -- no auth fields mixed into `RigletConfig`.
 
-- A shared secret / API token generated at first boot or during setup
-- Token required in an `Authorization` header or as a WebSocket query parameter
-- No user accounts, roles, or complex RBAC -- this is a single-operator system
-- The setup wizard should be accessible without auth on first boot (when no config exists), then require auth for subsequent access
+The secrets file schema:
+
+```yaml
+password_hash: "$2b$12$..."    # bcrypt hash of the password
+session_secret: "..."           # 32-byte random key for signing session cookies (hex-encoded)
+```
+
+**Password hashing uses `bcrypt`** via the `bcrypt` Python package. bcrypt is the right choice here: it is purpose-built for password hashing, has a built-in salt, and is computationally expensive enough to resist brute-force attacks even if the hash leaks. The work factor (cost=12, the default) is appropriate for a single login on a Pi 4.
+
+The `session_secret` is a 32-byte random key generated once and used to sign session cookies via `itsdangerous.URLSafeTimedSerializer`. This key is never exposed to the client.
+
+#### Password Setting
+
+The password is set during the **setup wizard** as a new step (Step 5, before Review & Apply). On first boot (no secrets file exists), the wizard requires the operator to choose a password. The password has a minimum length of 8 characters but no complexity requirements -- this is a LAN device, not a bank.
+
+After initial setup, the password can be changed via a `POST /api/auth/password` endpoint (requires current session). A `RIGLET_DEFAULT_PASSWORD` environment variable can seed the password on first boot for headless/automated deployments, but is ignored if a secrets file already exists.
+
+If the secrets file is deleted, the next startup regenerates the session secret (invalidating all sessions) and the setup wizard prompts for a new password.
+
+#### Session Mechanism
+
+Sessions use **signed, HttpOnly cookies** rather than Bearer tokens or JWTs. Rationale:
+
+| Approach | Pros | Cons |
+|----------|------|------|
+| HttpOnly cookie | Browser sends automatically (no JS token management); immune to XSS token theft; works with WebSocket upgrades transparently | Requires CSRF protection for mutating requests |
+| Bearer token in localStorage | Simple to implement; explicit in API calls | Vulnerable to XSS; requires manual attachment to every request and WebSocket URL |
+| JWT | Stateless verification | Overkill for single-user; no revocation without server state; token size overhead |
+
+**Decision: HttpOnly session cookie**, signed with `itsdangerous.URLSafeTimedSerializer`.
+
+Cookie properties:
+- **Name**: `riglet_session`
+- **Value**: `itsdangerous`-signed payload containing `{"v": 1}` (version marker; no user identity needed since there is only one user)
+- **HttpOnly**: `true` (JavaScript cannot read the cookie -- XSS cannot steal the session)
+- **SameSite**: `Lax` (cookie sent on same-site requests and top-level navigations; blocks cross-site POST attacks without breaking normal navigation)
+- **Secure**: `false` (Riglet runs on HTTP over LAN; setting Secure would break cookies entirely)
+- **Max-Age**: 30 days (sessions last 30 days; configurable via `SESSION_MAX_AGE_DAYS` env var)
+- **Path**: `/`
+
+**CSRF protection**: Because SameSite=Lax already blocks cross-origin POST/PUT/DELETE/PATCH requests from other sites, and the application runs on a private LAN (not a public domain), explicit CSRF tokens are not required. The combination of SameSite=Lax + HttpOnly provides sufficient protection for this deployment model.
+
+Session validation: On each request, the middleware unsigns the cookie using `itsdangerous`. If the signature is invalid or the cookie has expired (older than Max-Age), the request is treated as unauthenticated. There is no server-side session store -- the signed cookie is the session.
+
+#### Backend Enforcement
+
+Authentication is enforced via **Starlette middleware** (`server/auth.py:AuthMiddleware`) rather than per-router FastAPI dependencies. Middleware is the right choice because:
+
+- It catches every request in one place, including WebSocket upgrades
+- No risk of forgetting to add a dependency to a new router
+- Public endpoints are whitelisted explicitly (deny-by-default)
+
+**Public endpoints** (no session required):
+- `POST /api/auth/login` -- the login endpoint itself
+- `GET /api/status` -- needed for health checks, setup wizard restart polling, and determining `setup_required` / `auth_required` state
+- `GET /` and all static file paths (`*.js`, `*.css`, `*.html`, `*.svg`, `*.png`, etc.) -- SPA assets must load without auth so the login page can render
+- `GET /api/hamlib/models` -- needed by setup wizard before auth exists
+
+**All other endpoints** require a valid `riglet_session` cookie. Unauthenticated requests receive a `401 Unauthorized` JSON response: `{"detail": "Authentication required"}`.
+
+**Setup wizard exception**: When no password has been set yet (secrets file missing or `password_hash` empty), the middleware permits all requests without authentication. This allows the setup wizard to run on first boot. Once a password is set and the secrets file exists, all subsequent requests require auth. The `GET /api/status` response includes an `auth_required: false` flag in this state so the frontend knows not to show the login gate.
+
+**WebSocket auth**: WebSocket upgrade requests carry cookies automatically (the browser sends cookies for the upgrade HTTP request). The middleware checks the cookie on the upgrade request just like any other request. No query-parameter tokens needed. This is a key advantage of the cookie approach over Bearer tokens.
+
+#### Frontend Flow
+
+The frontend implements a **login gate** at the `+layout.svelte` level:
+
+1. On app load, `GET /api/status` is called. The response includes `auth_required: boolean`.
+2. If `auth_required` is `false` (first boot, no password set), the app proceeds normally to the setup wizard or main UI.
+3. If `auth_required` is `true`, the layout checks for an existing valid session by looking at the status response. If the request succeeded with a 200 (cookie was sent and accepted), the user is authenticated.
+4. If the user needs to log in (no cookie or expired cookie), the layout renders a `/login` route instead of the requested page.
+5. The login page has a single password field and a submit button. On submit, it calls `POST /api/auth/login` with `{"password": "..."}`.
+6. On success, the server sets the `riglet_session` cookie in the response, and the frontend navigates to `/` (or the originally requested path).
+7. On failure, the login page shows an error: "Incorrect password."
+8. If any API call returns 401 during normal operation (session expired), the frontend redirects to the login page.
+
+The login page is a new SvelteKit route at `ui/src/routes/login/+page.svelte`. It is styled consistently with the setup wizard (dark background, centered card, Riglet branding).
+
+The `api.ts` `request()` helper is updated to detect 401 responses and trigger a redirect to `/login` via `goto('/login')`. The `credentials: 'same-origin'` fetch option ensures cookies are sent with every request (this is the default for same-origin requests but is set explicitly for clarity).
+
+#### Logout
+
+A logout button is added to the topbar (visible when authenticated). Clicking it calls `POST /api/auth/logout`, which clears the `riglet_session` cookie by setting it with `Max-Age=0`. The frontend then redirects to `/login`.
+
+#### Password Change
+
+A "Change Password" option is accessible from the setup/settings page. It calls `POST /api/auth/password` with `{"current_password": "...", "new_password": "..."}`. On success, all existing sessions are invalidated (the `session_secret` is regenerated in the secrets file), and the user is redirected to the login page with a message: "Password changed. Please log in with your new password."
+
+#### Dependencies
+
+Two new Python packages:
+- **`bcrypt`**: Password hashing. Well-established, minimal, no transitive dependencies.
+- **`itsdangerous`**: Cookie signing. Already was planned as a dependency; lightweight, from the Pallets project (Flask ecosystem).
+
+Both are added to `pyproject.toml` `dependencies`.
+
+#### Architecture Decision Record
+
+| # | Topic | Decision | Rationale |
+|---|-------|----------|-----------|
+| 14 | Auth mechanism | **HttpOnly session cookie** (signed with itsdangerous) | Automatic browser handling; XSS-immune; works with WebSocket upgrades transparently; simpler frontend code than Bearer tokens |
+| 15 | Password storage location | **Separate secrets file** (`secrets.yaml`) | Keeps password hash out of exportable config; tighter file permissions; clean separation of concerns |
+| 16 | Password hashing | **bcrypt** (cost=12) | Purpose-built for passwords; built-in salt; appropriate for single-login Pi 4 workload |
+| 17 | Auth enforcement | **Starlette middleware** (deny-by-default) | Catches all routes including WebSocket; no risk of missing a router; whitelist is explicit |
+| 18 | Session duration | **30 days** | Long enough for daily use without re-login; short enough to limit exposure from a stolen cookie |
+| 19 | CSRF protection | **SameSite=Lax** (no explicit CSRF tokens) | SameSite blocks cross-origin mutations; LAN-only deployment eliminates external attacker surface |
+| 20 | Password initial setup | **Setup wizard step** | Natural place for first-time configuration; consistent with existing setup flow |
 
 ### Input Validation Gaps
 
@@ -363,6 +471,7 @@ riglet/
 
   server/                         # Backend application
     main.py                       # FastAPI app, startup/shutdown
+    auth.py                       # AuthMiddleware, password hashing, secrets file I/O
     state.py                      # RadioManager, RadioInstance
     config.py                     # config.yaml read/write/validate
     deps.py                       # Shared FastAPI dependencies
@@ -721,7 +830,7 @@ On page load:
 | DSP config save storms during rapid adjustment | Medium | Client-side debounce (500ms) coalesces rapid parameter changes into a single save. The UI remains responsive because audio changes are instant (Web Audio node updates) while persistence is async. |
 | Popover positioning on small screens | Medium | Use a utility like Floating UI (Popper successor) or manual viewport-aware positioning. Fall back to a bottom sheet on narrow screens. |
 | Per-radio DSP config bloats config.yaml | Low | DSP config adds ~40 lines per radio. For 1-3 radios this is negligible. The YAML remains human-readable. |
-| Unauthorized transmitter keying over LAN | High | Add token-based authentication before any production deployment. See Security Model section. |
+| Unauthorized transmitter keying over LAN | High | Session-cookie password auth with bcrypt hashing and itsdangerous-signed HttpOnly cookies. See Security Model section. |
 | rigctld command injection via mode strings | High | Validate all user-supplied strings (mode, VFO) against known allowlists before interpolating into rigctld protocol commands. |
 | Concurrent config mutation (lost updates) | Medium | Config read-modify-write cycles across multiple endpoints have no locking. Add an `asyncio.Lock` around config mutation paths. |
 | Single SSE subscriber starves others | Medium | The device event queue is single-consumer. Multiple SSE clients (e.g., two browser tabs on the setup wizard) cause event loss. Replace with a broadcast pattern (one queue per subscriber). |
@@ -785,7 +894,7 @@ Issues identified by audit (2026-03-29) that are understood and tracked for reso
 
 ### Code Quality
 
-- **Unused `itsdangerous` dependency**: Listed in `pyproject.toml` but never imported. Should be either removed or used to implement authentication.
+- **`itsdangerous` and `bcrypt` dependencies**: Used by the authentication system for session cookie signing and password hashing respectively. See Security Model section.
 
 - **Duplicate `RadioDep` type alias**: Defined in both `deps.py` (canonical) and `audio.py` (local copy). The local copy could silently diverge.
 

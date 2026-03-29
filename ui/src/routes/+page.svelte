@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
 	import { goto } from '$app/navigation';
-	import { getStatus, getConfig, getRadioCat, getPresets, postAudioVolume, getDspConfig } from '$lib/api.js';
+	import { getStatus, getConfig, getRadioCat, getPresets, postAudioVolume, getDspConfig, getAuthStatus, postLogout } from '$lib/api.js';
 	import type { RxDspConfig, TxDspConfig } from '$lib/api.js';
 	import { DspPersistence } from '$lib/dsp-persistence.js';
 	import { radioState, appConfig, theme } from '$lib/stores.js';
@@ -159,9 +159,25 @@
 	let mountCleanup: (() => void) | undefined;
 	onDestroy(() => mountCleanup?.());
 
+	async function handleLogout() {
+		await postLogout();
+		await goto('/login');
+	}
+
 	onMount(async () => {
 		// Sync resolved theme from data-theme attribute set by initTheme() in layout
 		resolvedTheme = (document.documentElement.getAttribute('data-theme') ?? 'dark') as 'dark' | 'light';
+
+		// Auth guard
+		try {
+			const auth = await getAuthStatus();
+			if (auth.password_set && !auth.authenticated) {
+				await goto('/login');
+				return;
+			}
+		} catch {
+			// backend unreachable — continue
+		}
 
 		// Check setup_required
 		try {
@@ -395,6 +411,12 @@
 			aria-label={resolvedTheme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
 		>{resolvedTheme === 'dark' ? '☀' : '☾'}</button>
 		<a href="/setup" class="setup-btn" title="Open setup wizard" aria-label="Setup / configuration">⚙</a>
+		<button
+			class="theme-btn"
+			onclick={handleLogout}
+			title="Log out"
+			aria-label="Log out"
+		>out</button>
 	</header>
 
 	<main id="main-content" tabindex="-1">

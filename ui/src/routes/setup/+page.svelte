@@ -1,6 +1,7 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
-	import { getConfig, postConfig, postConfigRestart } from '$lib/api.js';
+	import { getConfig, postConfig, postConfigRestart, getAuthStatus } from '$lib/api.js';
 	import { appConfig } from '$lib/stores.js';
 	import { waitForRestart } from '$lib/reconnect.js';
 	import StepWelcome from '$lib/components/wizard/StepWelcome.svelte';
@@ -8,9 +9,10 @@
 	import StepMapAudio from '$lib/components/wizard/StepMapAudio.svelte';
 	import StepPttMethod from '$lib/components/wizard/StepPttMethod.svelte';
 	import StepReviewApply from '$lib/components/wizard/StepReviewApply.svelte';
+	import StepSetPassword from '$lib/components/wizard/StepSetPassword.svelte';
 	import type { RigletConfig } from '$lib/types.js';
 
-	const STEPS = ['Welcome', 'Detect Radios', 'Map Audio', 'PTT Method', 'Review & Apply'];
+	const STEPS = ['Welcome', 'Detect Radios', 'Map Audio', 'PTT Method', 'Review & Apply', 'Set Password'];
 
 	let step = $state(0);
 	let applying = $state(false);
@@ -23,6 +25,18 @@
 		audio: { sample_rate: 16000, chunk_ms: 20 },
 		radios: [],
 		presets: [],
+	});
+
+	onMount(async () => {
+		try {
+			const auth = await getAuthStatus();
+			if (auth.password_set && !auth.authenticated) {
+				await goto('/login');
+				return;
+			}
+		} catch {
+			// backend unreachable — continue
+		}
 	});
 
 	// Fetch existing config on mount to prefill
@@ -73,7 +87,7 @@
 
 			const back = await waitForRestart(30_000);
 			if (back) {
-				await goto('/');
+				step = 5;
 				return;
 			}
 			applyError = 'Service did not come back within 30 seconds. Try refreshing the page.';
@@ -114,15 +128,19 @@
 			<StepPttMethod radios={config.radios} onUpdate={updateRadios} />
 		{:else if step === 4}
 			<StepReviewApply {config} onApply={applyAndStart} {applying} {applyError} />
+		{:else if step === 5}
+			<StepSetPassword onPasswordSet={() => goto('/')} />
 		{/if}
 	</main>
 
+	{#if step < STEPS.length - 1}
 	<footer>
 		<button onclick={prev} disabled={step === 0}>Back</button>
-		{#if step < STEPS.length - 1}
+		{#if step < STEPS.length - 2}
 			<button class="primary" onclick={next}>Next</button>
 		{/if}
 	</footer>
+	{/if}
 </div>
 
 <style>

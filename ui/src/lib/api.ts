@@ -48,6 +48,12 @@ export interface TxDspConfig {
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
 	const res = await fetch(path, options);
 	if (!res.ok) {
+		if (res.status === 401) {
+			if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
+				window.location.href = '/login';
+			}
+			throw new Error('Not authenticated');
+		}
 		const text = await res.text().catch(() => res.statusText);
 		throw new Error(`${res.status} ${res.statusText}: ${text}`);
 	}
@@ -63,6 +69,22 @@ function json(method: string, body: unknown): RequestInit {
 		headers: { 'Content-Type': 'application/json' },
 		body: JSON.stringify(body),
 	};
+}
+
+export function getAuthStatus(): Promise<{ authenticated: boolean; password_set: boolean }> {
+	return request<{ authenticated: boolean; password_set: boolean }>('/api/auth/status');
+}
+
+export function postLogin(password: string): Promise<{ status: string }> {
+	return request<{ status: string }>('/api/auth/login', json('POST', { password }));
+}
+
+export function postLogout(): Promise<{ status: string }> {
+	return request<{ status: string }>('/api/auth/logout', { method: 'POST' });
+}
+
+export function postSetPassword(password: string): Promise<{ status: string }> {
+	return request<{ status: string }>('/api/auth/set-password', json('POST', { password }));
 }
 
 export function getStatus(): Promise<StatusResponse> {

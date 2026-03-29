@@ -17,9 +17,11 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.responses import Response
 from starlette.types import Scope
 
+from auth import SessionAuthMiddleware
 from config import RigletConfig, default_config, load_config
 from devices import DeviceEventBroadcaster, UdevMonitor
 from routers.audio import router as _audio_router
+from routers.auth import router as _auth_router
 from routers.cat import router as _cat_router
 from routers.devices import router as _devices_router
 from routers.dsp import router as _dsp_router
@@ -68,10 +70,14 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
 app = FastAPI(title="Riglet", version="0.1.0", lifespan=lifespan)
 
+# Auth middleware — wraps all routes; bypasses non-API and whitelisted paths.
+app.add_middleware(SessionAuthMiddleware)
+
 # ---------------------------------------------------------------------------
 # Routers — must be registered before the catch-all static mount
 # ---------------------------------------------------------------------------
 
+app.include_router(_auth_router, prefix="/api")
 app.include_router(_system_router, prefix="/api")
 app.include_router(_devices_router, prefix="/api")
 app.include_router(_cat_router, prefix="/api")
