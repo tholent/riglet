@@ -180,9 +180,10 @@ export class Spectrogram3dRenderer implements Renderer {
 			ctx.lineTo(rightX, baseY);
 			ctx.closePath();
 
-			// Fill: use average amplitude for the overall color, keep mostly opaque
+			// Very subtle fill — just enough to give depth without creating an opaque wall
+			// when many frames stack. Ridge stroke lines are the primary visual.
 			const avg = frame.reduce((s, v) => s + v, 0) / Math.max(1, binCount);
-			ctx.fillStyle = binColor(avg, alpha * 0.45);
+			ctx.fillStyle = binColor(avg, alpha * 0.06);
 			ctx.fill();
 
 			// Per-bin color on the spectrum ridge
