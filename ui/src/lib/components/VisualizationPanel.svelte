@@ -408,10 +408,10 @@
 	/* ---- waterfall controls popup ---- */
 	.wf-popup-wrap {
 		position: absolute;
-		top: 4px;
+		bottom: 32px; /* sit above the frequency axis (AXIS_HEIGHT = 28px) */
 		right: 4px;
 		display: flex;
-		flex-direction: column;
+		flex-direction: column-reverse;
 		align-items: flex-end;
 		gap: 2px;
 		z-index: 10;
