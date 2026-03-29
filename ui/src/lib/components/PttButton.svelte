@@ -77,10 +77,6 @@
 		{ptt ? 'TX' : 'PTT'}
 	</button>
 
-	{#if ptt}
-		<span class="tx-indicator" aria-live="assertive" aria-atomic="true">TRANSMITTING</span>
-	{/if}
-
 	<div class="vox-row">
 		<button
 			class="vox-btn"
@@ -144,14 +140,6 @@
 		box-shadow: 0 0 16px rgba(239, 83, 80, 0.6);
 	}
 
-	.tx-indicator {
-		font-size: 0.75rem;
-		font-weight: 700;
-		color: #ef5350;
-		letter-spacing: 0.1em;
-		animation: blink 0.8s step-end infinite;
-	}
-
 	.vox-row {
 		display: flex;
 		align-items: center;
@@ -200,11 +188,6 @@
 		animation: pulse 0.6s ease-in-out infinite alternate;
 	}
 
-	@keyframes blink {
-		0%, 100% { opacity: 1; }
-		50% { opacity: 0; }
-	}
-
 	@keyframes pulse {
 		from { opacity: 0.6; }
 		to   { opacity: 1; }
@@ -213,9 +196,6 @@
 	@media (prefers-reduced-motion: reduce) {
 		.ptt-btn {
 			transition: none;
-		}
-		.tx-indicator {
-			animation: none;
 		}
 		.vox-indicator.detecting {
 			animation: none;

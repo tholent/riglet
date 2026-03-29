@@ -16,7 +16,6 @@
 
 <div class="cat-extended" aria-label="Extended CAT controls">
 	<VfoSelector {vfo} {controlWs} />
-	<SwrMeter {swr} {ptt} />
 	<CtcssSelector tone={ctcssTone} {controlWs} />
 </div>
 
