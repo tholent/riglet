@@ -42,6 +42,141 @@ class AudioGlobalConfig(BaseModel):
     chunk_ms: int = 20
 
 
+class RxDspConfig(BaseModel):
+    highpass_enabled: bool = False
+    highpass_freq: int = 100
+    lowpass_enabled: bool = False
+    lowpass_freq: int = 3000
+    peak_enabled: bool = False
+    peak_freq: int = 1000
+    peak_gain: float = 0.0
+    peak_q: float = 1.0
+    noise_blanker_enabled: bool = False
+    noise_blanker_freq: int = 50
+    notch_enabled: bool = False
+    notch_mode: Literal["manual", "auto"] = "manual"
+    notch_freq: int = 1000
+    notch_q: float = 10.0
+    bandpass_enabled: bool = False
+    bandpass_preset: Literal["voice", "cw", "manual"] = "voice"
+    bandpass_center: int = 1500
+    bandpass_width: int = 2400
+    nr_enabled: bool = False
+    nr_amount: float = 0.5
+
+    @field_validator("highpass_freq")
+    @classmethod
+    def highpass_freq_in_range(cls, v: int) -> int:
+        if not 50 <= v <= 500:
+            raise ValueError("highpass_freq must be between 50 and 500 Hz")
+        return v
+
+    @field_validator("lowpass_freq")
+    @classmethod
+    def lowpass_freq_in_range(cls, v: int) -> int:
+        if not 1500 <= v <= 5000:
+            raise ValueError("lowpass_freq must be between 1500 and 5000 Hz")
+        return v
+
+    @field_validator("peak_freq")
+    @classmethod
+    def peak_freq_in_range(cls, v: int) -> int:
+        if not 200 <= v <= 4000:
+            raise ValueError("peak_freq must be between 200 and 4000 Hz")
+        return v
+
+    @field_validator("peak_gain")
+    @classmethod
+    def peak_gain_in_range(cls, v: float) -> float:
+        if not -20.0 <= v <= 20.0:
+            raise ValueError("peak_gain must be between -20.0 and 20.0 dB")
+        return v
+
+    @field_validator("peak_q")
+    @classmethod
+    def peak_q_in_range(cls, v: float) -> float:
+        if not 0.1 <= v <= 30.0:
+            raise ValueError("peak_q must be between 0.1 and 30.0")
+        return v
+
+    @field_validator("noise_blanker_freq")
+    @classmethod
+    def noise_blanker_freq_must_be_50_or_60(cls, v: int) -> int:
+        if v not in (50, 60):
+            raise ValueError("noise_blanker_freq must be 50 or 60")
+        return v
+
+    @field_validator("notch_freq")
+    @classmethod
+    def notch_freq_in_range(cls, v: int) -> int:
+        if not 100 <= v <= 5000:
+            raise ValueError("notch_freq must be between 100 and 5000 Hz")
+        return v
+
+    @field_validator("notch_q")
+    @classmethod
+    def notch_q_in_range(cls, v: float) -> float:
+        if not 1.0 <= v <= 50.0:
+            raise ValueError("notch_q must be between 1.0 and 50.0")
+        return v
+
+    @field_validator("nr_amount")
+    @classmethod
+    def nr_amount_in_range(cls, v: float) -> float:
+        if not 0.0 <= v <= 1.0:
+            raise ValueError("nr_amount must be between 0.0 and 1.0")
+        return v
+
+
+class TxDspConfig(BaseModel):
+    highpass_enabled: bool = False
+    highpass_freq: int = 100
+    lowpass_enabled: bool = False
+    lowpass_freq: int = 3000
+    eq_enabled: bool = False
+    eq_bass_gain: float = 0.0
+    eq_mid_gain: float = 0.0
+    eq_treble_gain: float = 0.0
+    compressor_enabled: bool = False
+    compressor_preset: Literal["off", "light", "medium", "heavy", "manual"] = "off"
+    compressor_threshold: float = -24.0
+    compressor_ratio: float = 4.0
+    compressor_attack: float = 0.003
+    compressor_release: float = 0.25
+    limiter_enabled: bool = False
+    limiter_threshold: float = -3.0
+    gate_enabled: bool = False
+    gate_threshold: float = -60.0
+
+    @field_validator("highpass_freq")
+    @classmethod
+    def highpass_freq_in_range(cls, v: int) -> int:
+        if not 50 <= v <= 500:
+            raise ValueError("highpass_freq must be between 50 and 500 Hz")
+        return v
+
+    @field_validator("lowpass_freq")
+    @classmethod
+    def lowpass_freq_in_range(cls, v: int) -> int:
+        if not 1500 <= v <= 5000:
+            raise ValueError("lowpass_freq must be between 1500 and 5000 Hz")
+        return v
+
+    @field_validator("eq_bass_gain", "eq_mid_gain", "eq_treble_gain")
+    @classmethod
+    def eq_gain_in_range(cls, v: float) -> float:
+        if not -20.0 <= v <= 20.0:
+            raise ValueError("EQ gain must be between -20.0 and 20.0 dB")
+        return v
+
+    @field_validator("gate_threshold")
+    @classmethod
+    def gate_threshold_in_range(cls, v: float) -> float:
+        if not -100.0 <= v <= 0.0:
+            raise ValueError("gate_threshold must be between -100.0 and 0.0 dBFS")
+        return v
+
+
 class RadioConfig(BaseModel):
     id: str
     name: str
@@ -56,6 +191,8 @@ class RadioConfig(BaseModel):
     enabled: bool = False
     polling_interval_ms: int = 100
     bands: list[str] = []
+    rx_dsp: RxDspConfig = RxDspConfig()
+    tx_dsp: TxDspConfig = TxDspConfig()
 
     @field_validator("polling_interval_ms")
     @classmethod

@@ -1,960 +1,780 @@
 # Riglet -- Implementation Plan
 
-> v0.1.0 is complete (phases 1-11 fully implemented and verified).
-> v0.2.0 plan follows. See `.state/OVERVIEW.md` for system design and v0.2.0 goals.
+---
+
+## Feature: v0.3.0 -- Per-Radio DSP Chains
+
+### Task Summary
+
+| #  | Task                                                              | Priority | Agent      | Status | Depends On | Notes                                           |
+|:---|:------------------------------------------------------------------|:---------|:-----------|:-------|:-----------|:------------------------------------------------|
+| 01 | Config schema: add RxDspConfig and TxDspConfig Pydantic models    | P0       | @developer | [x]    | --         | Nested under RadioConfig                        |
+| 02 | DSP config API: GET/PATCH per-radio DSP settings endpoint         | P0       | @developer | [ ]    | 01         | `routers/dsp.py`, mount on `/api`               |
+| 03 | RxDspChain: highpass filter node (100-300 Hz)                     | P1       | @developer | [x]    | --         | BiquadFilterNode highpass in `rx-dsp-chain.ts`  |
+| 04 | RxDspChain: lowpass filter node (2.5-3.5 kHz)                    | P1       | @developer | [x]    | --         | BiquadFilterNode lowpass in `rx-dsp-chain.ts`   |
+| 05 | RxDspChain: peak filter node                                     | P1       | @developer | [x]    | --         | BiquadFilterNode peaking in `rx-dsp-chain.ts`   |
+| 06 | RxDspChain: noise blanker node (biquad notch at 50/60 Hz)        | P1       | @developer | [x]    | --         | BiquadFilterNode notch, switchable 50/60 Hz     |
+| 07 | RxDspChain: notch filter node (auto/manual, BiquadFilterNode)    | P1       | @developer | [x]    | --         | Manual freq+Q or auto-detect                    |
+| 08 | RxDspChain: bandpass filter (presets + manual range)              | P1       | @developer | [x]    | --         | Presets: 2.4 kHz voice, 500 Hz CW, manual       |
+| 09 | RxDspChain: DSP noise reduction AudioWorklet                     | P1       | @developer | [x]    | --         | Spectral subtraction in `nr-worklet-processor.ts`|
+| 10 | Wire RxDspChain into AudioManager RX playback path               | P0       | @developer | [ ]    | 03-09      | Replace existing DspChain with RxDspChain       |
+| 11 | TxDspChain: highpass + lowpass filter nodes                      | P1       | @developer | [x]    | --         | New class in `tx-dsp-chain.ts`                  |
+| 12 | TxDspChain: 3-band EQ (3x BiquadFilterNode)                     | P1       | @developer | [ ]    | 11         | lowshelf, peaking, highshelf                    |
+| 13 | TxDspChain: vocal compressor (DynamicsCompressorNode)            | P1       | @developer | [ ]    | 11         | Presets + manual params                         |
+| 14 | TxDspChain: limiter stage (DynamicsCompressorNode, high ratio)   | P1       | @developer | [ ]    | 11         | ratio >= 20, knee 0                             |
+| 15 | TxDspChain: noise gate (threshold-based gate node)               | P1       | @developer | [ ]    | 11         | GainNode snapped 0/1 by analyser RMS            |
+| 16 | Wire TxDspChain into AudioManager TX capture path                | P0       | @developer | [ ]    | 11-15      | Insert before PCM worklet                       |
+| 17 | RxDspPillRow component                                           | P1       | @developer | [ ]    | 10         | Pill row below freq display, active color       |
+| 18 | RxDspPopover component                                           | P1       | @developer | [ ]    | 17         | Per-filter config panel with on/off toggle      |
+| 19 | TxDspPanel component                                             | P1       | @developer | [ ]    | 16         | Co-located with PTT, button to open menu        |
+| 20 | TxDspMenu component                                              | P1       | @developer | [ ]    | 19         | Compressor presets, manual sliders, EQ, gate    |
+| 21 | Integrate RxDspPillRow into main page layout                     | P0       | @developer | [ ]    | 17, 18     | `routes/+page.svelte`                           |
+| 22 | Integrate TxDspPanel into PTT area                               | P0       | @developer | [ ]    | 19, 20     | `routes/+page.svelte`                           |
+| 23 | Load DSP config from backend on radio connect                    | P0       | @developer | [ ]    | 02, 10, 16 | Fetch GET on WS open, apply to chains           |
+| 24 | Debounced save DSP config to backend on parameter change         | P0       | @developer | [ ]    | 02, 23     | 500ms debounce, PATCH on change                 |
+| 25 | Backend: unit tests for RxDspConfig and TxDspConfig validation   | P0       | @developer | [ ]    | 01         | `tests/test_dsp_config.py`                      |
+| 26 | Backend: integration tests for DSP config GET/PATCH              | P0       | @developer | [ ]    | 02         | `tests/test_dsp_api.py`                         |
+| 27 | Frontend: unit tests for RxDspChain node wiring                  | P0       | @developer | [ ]    | 10         | Vitest, mock AudioContext                       |
+| 28 | Frontend: unit tests for TxDspChain node wiring                  | P0       | @developer | [ ]    | 16         | Vitest, mock AudioContext                       |
 
 ---
 
-## Feature: v0.2.0 -- Rich Visualization, Client-Side DSP, Enhanced Controls
+### Parallelization Strategy
 
-## Task Summary
+**Wave 1** (no dependencies, all independent):
+- Task 01: Backend config schema
+- Tasks 03-09: All individual RxDspChain filter nodes (can be developed independently as each is a self-contained node)
+- Task 11: TxDspChain base class with highpass + lowpass
 
-| # | Task | Priority | Agent | Status | Depends On | Notes |
-|:--|:-----|:---------|:------|:-------|:-----------|:------|
-| 1 | Region-aware band plan data module | P0 | @developer | [x] complete | -- | Backend + frontend data |
-| 2 | Config schema: operator.region, radio.type, radio.bands, presets | P0 | @developer | [x] complete | -- | Pydantic models + validation |
-| 3 | Config schema frontend types | P0 | @developer | [x] complete | 2 | TypeScript types match new schema |
-| 4 | Explicit simulation radio type | P0 | @developer | [x] complete | 2 | RadioInstance type-aware behavior |
-| 5 | Extended CAT: VFO, SWR, CTCSS | P1 | @developer | [x] complete | 4 | New rigctld commands in state.py + cat router |
-| 6 | Curated mode list per radio | P1 | @developer | [x] complete | 5 | Hamlib model -> mode list mapping |
-| 7 | Frequency presets API | P1 | @developer | [x] complete | 2 | REST CRUD for presets in config |
-| 8 | Band plan API endpoint | P1 | @developer | [x] complete | 1 | GET /api/bandplan |
-| 9 | Theme infrastructure (CSS custom properties) | P0 | @developer | [x] complete | -- | Light/dark theme system |
-| 10 | Accessibility foundation | P0 | @developer | [x] complete | 9 | ARIA roles, keyboard nav, skip links |
-| 11 | Scroll-wheel mixin for dial controls | P1 | @developer | [x] complete | 10 | Reusable Svelte action |
-| 12 | Visualization renderer interface | P0 | @developer | [x] complete | -- | Pluggable canvas renderer abstraction |
-| 13 | Refactor Waterfall to use renderer interface | P0 | @developer | [x] complete | 12 | Migrate existing waterfall |
-| 14 | Spectrum scope renderer | P1 | @developer | [x] complete | 12 | Freq vs amplitude overlay |
-| 15 | Oscilloscope renderer | P1 | @developer | [x] complete | 12 | Time-domain waveform |
-| 16 | Constellation renderer | P2 | @developer | [x] complete | 12 | X-Y plot for I/Q or L/R |
-| 17 | Phase/correlation meter renderer | P2 | @developer | [x] complete | 12 | Correlation coefficient display |
-| 41 | 3D spectrogram renderer | P1 | @developer | [x] complete | 12 | WebGL freq-time-amplitude perspective view |
-| 18 | Visualization mode switcher UI | P1 | @developer | [x] complete | 13, 14 | Toggle between visualization modes |
-| 19 | LUFS audio meter component | P1 | @developer | [x] complete | 12 | User-toggleable meter with peak hold |
-| 20 | Waterfall cursor (passband overlay) | P1 | @developer | [x] complete | 13, 6 | Mode-aware passband highlight |
-| 21 | Waterfall cursor drag-to-tune | P1 | @developer | [x] complete | 20 | Dragging cursor changes frequency |
-| 22 | Client-side DSP: volume + squelch nodes | P0 | @developer | [x] complete | -- | Web Audio API gain + gate in AudioManager |
-| 23 | Client-side DSP: bandpass + notch filters | P1 | @developer | [x] complete | 22 | BiquadFilterNode chain |
-| 24 | Client-side DSP: noise reduction worklet | P2 | @developer | [x] complete | 22 | Spectral subtraction AudioWorklet |
-| 25 | Client-side DSP: compressor + 3-band EQ | P1 | @developer | [x] complete | 22 | DynamicsCompressorNode + 3x BiquadFilter |
-| 26 | DSP controls panel component | P1 | @developer | [x] complete | 23, 25 | UI for all DSP parameters |
-| 27 | TX visualization switching | P1 | @developer | [x] complete | 12, 22 | Show TX audio in active viz during PTT |
-| 28 | VOX mode with hot-mic prevention | P1 | @developer | [x] complete | 22 | Audio gate threshold + hang timer |
-| 29 | Region-aware BandSelector component | P1 | @developer | [x] complete | 1, 3 | All region bands; greyed for non-enabled |
-| 30 | Frequency presets UI | P1 | @developer | [x] complete | 7, 29 | Preset selector + label in freq display |
-| 31 | Layout system: schema + persistence | P1 | @developer | [x] complete | 18 | JSON layout configs in localStorage |
-| 32 | Layout system: save/load/export/import UI | P1 | @developer | [x] complete | 31 | Layout management panel |
-| 33 | Main page layout refactor for configurable panels | P1 | @developer | [x] complete | 31 | Dynamic grid from layout config |
-| 34 | Virtual device passthrough documentation | P2 | @developer | [x] complete | -- | Docs + helper scripts |
-| 35 | Extended CAT frontend controls (VFO, SWR, CTCSS) | P1 | @developer | [x] complete | 5, 10 | UI for new CAT features |
-| 36 | ModeSelector curated mode support | P1 | @developer | [x] complete | 6, 3 | Filter modes per radio capability |
-| 37 | Backend tests: band plan, presets, config schema | P0 | @tester | [x] complete | 1, 2, 7 | pytest for new backend features |
-| 38 | Backend tests: extended CAT, simulation type | P1 | @tester | [x] complete | 4, 5 | pytest for new CAT + simulation |
-| 39 | Frontend build verification | P1 | @tester | [x] complete | 33 | npm run build passes clean |
-| 40 | Full lint + type check pass | P0 | @tester | [x] complete | 33 | ruff, mypy, svelte-check all clean |
+**Wave 2** (depends on Wave 1 outputs):
+- Task 02: DSP config API (depends on 01)
+- Task 10: Wire RxDspChain into AudioManager (depends on 03-09)
+- Tasks 12-15: TxDspChain additional stages (depend on 11)
+- Task 25: Backend schema tests (depends on 01)
+
+**Wave 3** (depends on Wave 2):
+- Task 16: Wire TxDspChain into AudioManager (depends on 11-15)
+- Task 17: RxDspPillRow component (depends on 10)
+- Task 19: TxDspPanel component (depends on 16)
+- Task 26: Backend API integration tests (depends on 02)
+- Task 27: RxDspChain unit tests (depends on 10)
+
+**Wave 4** (depends on Wave 3):
+- Task 18: RxDspPopover component (depends on 17)
+- Task 20: TxDspMenu component (depends on 19)
+- Task 28: TxDspChain unit tests (depends on 16)
+
+**Wave 5** (integration, depends on Wave 4):
+- Task 21: Integrate RxDspPillRow into main page (depends on 17, 18)
+- Task 22: Integrate TxDspPanel into PTT area (depends on 19, 20)
+- Task 23: Load DSP config from backend on connect (depends on 02, 10, 16)
+
+**Wave 6** (final, depends on Wave 5):
+- Task 24: Debounced save DSP config on change (depends on 02, 23)
 
 ---
 
-## Parallelization Strategy
+### Task Descriptions
 
-### Wave 1 -- Foundation (no interdependencies within wave)
-Tasks 1, 2, 9, 12, 22, 34
+#### Task 01: Config schema -- add RxDspConfig and TxDspConfig Pydantic models
 
-These are all independent foundations: band plan data, config schema changes, theme CSS system, visualization renderer interface, DSP audio node infrastructure, and passthrough docs. All can proceed in parallel.
+**File:** `server/config.py`
 
-### Wave 2 -- Core Features (depend on Wave 1)
-Tasks 3, 4, 10, 11, 13, 14, 15, 23, 25
+Add two new Pydantic v2 `BaseModel` subclasses and nest them as optional fields on `RadioConfig`.
 
-Config frontend types (needs 2), explicit simulation (needs 2), accessibility (needs 9), scroll-wheel (needs 10 -- sequential within wave), waterfall refactor + spectrum + oscilloscope (need 12), DSP filters + EQ (need 22). Tasks 3/4 are sequential. Tasks 10/11 are sequential. Others parallelize freely.
+**RxDspConfig fields:**
+- `highpass_enabled: bool = False`
+- `highpass_freq: int = 100` (range 50-500 Hz, field_validator)
+- `lowpass_enabled: bool = False`
+- `lowpass_freq: int = 3000` (range 1500-5000 Hz, field_validator)
+- `peak_enabled: bool = False`
+- `peak_freq: int = 1000` (range 200-4000 Hz)
+- `peak_gain: float = 0.0` (range -20.0 to +20.0 dB)
+- `peak_q: float = 1.0` (range 0.1-30.0)
+- `noise_blanker_enabled: bool = False`
+- `noise_blanker_freq: int = 50` (literal 50 or 60)
+- `notch_enabled: bool = False`
+- `notch_mode: Literal["manual", "auto"] = "manual"`
+- `notch_freq: int = 1000` (range 100-5000 Hz)
+- `notch_q: float = 10.0` (range 1.0-50.0)
+- `bandpass_enabled: bool = False`
+- `bandpass_preset: Literal["voice", "cw", "manual"] = "voice"`
+- `bandpass_center: int = 1500` (Hz)
+- `bandpass_width: int = 2400` (Hz)
+- `nr_enabled: bool = False`
+- `nr_amount: float = 0.5` (range 0.0-1.0)
 
-### Wave 3 -- Integrated Features (depend on Wave 2)
-Tasks 5, 6, 7, 8, 16, 17, 18, 19, 20, 24, 26, 27, 28, 29, 30, 41
+**TxDspConfig fields:**
+- `highpass_enabled: bool = False`
+- `highpass_freq: int = 100` (range 50-500 Hz)
+- `lowpass_enabled: bool = False`
+- `lowpass_freq: int = 3000` (range 1500-5000 Hz)
+- `eq_enabled: bool = False`
+- `eq_bass_gain: float = 0.0` (dB, -20 to +20)
+- `eq_mid_gain: float = 0.0` (dB, -20 to +20)
+- `eq_treble_gain: float = 0.0` (dB, -20 to +20)
+- `compressor_enabled: bool = False`
+- `compressor_preset: Literal["off", "light", "medium", "heavy", "manual"] = "off"`
+- `compressor_threshold: float = -24.0` (dBFS)
+- `compressor_ratio: float = 4.0`
+- `compressor_attack: float = 0.003` (seconds)
+- `compressor_release: float = 0.25` (seconds)
+- `limiter_enabled: bool = False`
+- `limiter_threshold: float = -3.0` (dBFS)
+- `gate_enabled: bool = False`
+- `gate_threshold: float = -60.0` (dBFS, range -100 to 0)
 
-Extended CAT, curated modes, presets API, band plan API, remaining renderers (constellation, phase, 3D spectrogram), viz switcher, LUFS meter, cursor, NR worklet, DSP panel, TX viz, VOX, band selector, preset UI. Many of these parallelize (e.g., 5/6/7/8 are backend; 16/17/18/19/41 are frontend viz; 26/28 are frontend DSP).
+**Nest on RadioConfig:**
+```python
+rx_dsp: RxDspConfig = RxDspConfig()
+tx_dsp: TxDspConfig = TxDspConfig()
+```
 
-### Wave 4 -- Layout + Integration (depend on Wave 3)
-Tasks 31, 33, 35, 36
+Both default to all-disabled so existing configs are backward-compatible.
 
-Layout system, main page refactor, extended CAT UI, curated mode UI. Tasks 35/36 parallelize with 31/33.
-
-### Wave 5 -- Polish + Finalization
-Tasks 32, 21, 37, 38, 39, 40
-
-Layout export/import UI, drag-to-tune cursor, all test suites, final lint/type checks.
-
----
-
-## Task Descriptions
-
-### Task 1: Region-aware band plan data module
-
-**Files**: `server/bandplan.py` (new), `ui/src/lib/bandplan.ts` (new)
-
-Create a pure-data module defining amateur band plans for known regions (us, eu, au). Each band entry contains: `name` (e.g. "20m"), `lower_mhz`, `upper_mhz`, `default_mode`. Include all HF bands (160m through 10m), VHF (6m, 2m), and UHF (70cm).
-
-Backend (`server/bandplan.py`):
-- `BAND_PLANS: dict[str, list[BandDef]]` keyed by region code
-- `BandDef` is a Pydantic `BaseModel` with fields: `name: str`, `lower_mhz: float`, `upper_mhz: float`, `default_mode: str`
-- `get_bands(region: str) -> list[BandDef]` returns the band list for a region; raises `ValueError` for unknown regions
-- US band plan includes: 160m (1.8-2.0), 80m (3.5-4.0), 60m (5.3305-5.4065), 40m (7.0-7.3), 30m (10.1-10.15), 20m (14.0-14.35), 17m (18.068-18.168), 15m (21.0-21.45), 12m (24.89-24.99), 10m (28.0-29.7), 6m (50.0-54.0), 2m (144.0-148.0), 70cm (420.0-450.0)
-- EU and AU plans differ in band edges per their regulatory domains
-
-Frontend (`ui/src/lib/bandplan.ts`):
-- Mirror the same data as TypeScript constants: `BandDef` interface, `BAND_PLANS` record
-- Export `getBands(region: string): BandDef[]`
-
-**Done when**: Both files exist, data is consistent between backend and frontend, `uv run mypy .` passes for bandplan.py, `npm run build` compiles bandplan.ts without errors.
-
----
-
-### Task 2: Config schema -- operator.region, radio.type, radio.bands, presets
-
-**File**: `server/config.py`
-
-Extend the Pydantic config models:
-
-1. Add `region: str = "us"` to `OperatorConfig`. Add a `@field_validator` that checks `region` is in `BAND_PLANS.keys()` (import from `bandplan.py`).
-
-2. Add `type: Literal["real", "simulated"] = "real"` to `RadioConfig`.
-
-3. Add `bands: list[str] = []` to `RadioConfig`. An empty list means "all bands in region" (resolved at runtime, not stored).
-
-4. Add a new `PresetConfig(BaseModel)` with fields: `id: str`, `name: str`, `band: str`, `frequency_mhz: float`, `offset_mhz: float = 0.0`, `ctcss_tone: float | None = None`, `mode: str | None = None`.
-
-5. Add `presets: list[PresetConfig] = []` to `RigletConfig`.
-
-6. Add a `@model_validator` on `RigletConfig` that validates each radio's `bands` list entries exist in the band plan for `self.operator.region`.
-
-7. Add a `@model_validator` on `RigletConfig` that validates each preset's `band` exists in the band plan.
-
-8. For `type: "simulated"` radios, relax the `audio_fields_required_when_enabled` validator -- simulated radios do not need real audio devices.
-
-9. Update `default_config()` to include `region="us"` in the operator section.
-
-**Done when**: `uv run pytest` passes, `uv run mypy .` passes, config round-trips (load -> save -> load) with new fields, invalid region/band values are rejected with clear errors.
+**Acceptance criteria:**
+- `load_config` / `save_config` round-trip with DSP fields present and absent
+- Validators reject out-of-range values with clear error messages
+- Existing `RadioConfig` tests still pass
 
 ---
 
-### Task 3: Config schema frontend types
+#### Task 02: DSP config API -- GET/PATCH per-radio DSP settings endpoint
 
-**File**: `ui/src/lib/types.ts`
+**File:** `server/routers/dsp.py` (new file)
 
-Update TypeScript interfaces to match the new config schema:
+Create a new APIRouter mounted in `main.py` at the `/api` prefix.
 
-1. Add `region: string` to the operator section of `RigletConfig`.
-2. Add `type: 'real' | 'simulated'` and `bands: string[]` to `RadioConfig`.
-3. Add `PresetConfig` interface: `id: string`, `name: string`, `band: string`, `frequency_mhz: number`, `offset_mhz: number`, `ctcss_tone: number | null`, `mode: string | null`.
-4. Add `presets: PresetConfig[]` to `RigletConfig`.
+**Endpoints:**
 
-**Done when**: `npm run build` compiles without type errors.
+`GET /api/radios/{radio_id}/dsp`
+- Returns `{"rx": <RxDspConfig dict>, "tx": <TxDspConfig dict>}`
+- Uses `get_radio` dependency (404 if radio not found)
+- Reads from the live config (`manager.config.radios[radio_id]`)
 
----
+`PATCH /api/radios/{radio_id}/dsp`
+- Request body: `{"rx": {<partial RxDspConfig fields>}, "tx": {<partial TxDspConfig fields>}}`
+- Both `rx` and `tx` keys are optional; missing keys mean "no change"
+- Merges partial updates onto existing config using `model_copy(update=...)`
+- Validates merged result (Pydantic validators run on copy)
+- Persists to disk via `save_config`
+- Returns the updated full DSP config (same shape as GET)
+- 409 on validation errors (RFC 7807 format, consistent with existing pattern)
 
-### Task 4: Explicit simulation radio type
+**Wire into main.py:**
+- Import `dsp_router` from `routers.dsp`
+- `app.include_router(dsp_router, prefix="/api")`
 
-**Files**: `server/state.py`, `server/main.py`
-
-Refactor `RadioInstance` and `RadioManager` so that simulation is driven by `RadioConfig.type` rather than connection failure:
-
-1. In `RadioInstance.__init__`, set `self.simulation = (config.type == "simulated")` immediately.
-2. In `RadioManager.startup()`:
-   - If `radio_cfg.type == "simulated"`: set `simulation=True`, `online=True`, skip `connect_rigctld()`.
-   - If `radio_cfg.type == "real"` and `radio_cfg.enabled`: call `connect_rigctld()`. On failure, set `online=False`, `simulation=False` (error state, NOT silent simulation).
-   - If `radio_cfg.type == "real"` and not `radio_cfg.enabled`: set `online=False`, `simulation=False`.
-3. In `connect_rigctld()`: on connection failure, do NOT set `simulation=True`. Set `online=False` only. Log as error, not warning.
-4. In `_poll_loop()`: if `not self.online and not self.simulation`, attempt reconnect (existing behavior). If `self.simulation`, run simulated polling (existing behavior). If `not self.online and self.config.type == "real"`, do NOT generate fake data.
-5. Update `RadioManager.status()` to include `type` field in the status dict.
-
-**Done when**: `uv run pytest` passes, `uv run mypy .` passes. A `type: simulated` radio starts online with fake data. A `type: real` radio with unreachable rigctld shows as offline (not simulated).
-
----
-
-### Task 5: Extended CAT -- VFO, SWR, CTCSS
-
-**Files**: `server/state.py`, `server/routers/cat.py`
-
-Add new rigctld commands to `RadioInstance`:
-
-1. `get_vfo() -> str`: query current VFO (`+\get_vfo`). Returns "VFOA", "VFOB", etc. Simulation returns "VFOA".
-2. `set_vfo(vfo: str) -> None`: set active VFO (`+\set_vfo {vfo}`). Simulation stores value.
-3. `get_swr() -> float`: query SWR meter (`+\get_level SWR`). Returns float (e.g. 1.5). Simulation returns 1.0.
-4. `get_ctcss() -> float`: query CTCSS tone (`+\get_ctcss_tone`). Returns Hz (e.g. 88.5). Simulation returns 0.0.
-5. `set_ctcss(tone: float) -> None`: set CTCSS tone (`+\set_ctcss_tone {tone_hz}`). 0 disables. Simulation stores value.
-
-Add state fields to `RadioInstance`: `vfo: str = "VFOA"`, `swr: float = 1.0`, `ctcss_tone: float = 0.0`.
-
-Update `poll_once()` to also query VFO and SWR (when PTT active) and include changes in the pushed state.
-
-Add REST endpoints in `cat.py`:
-- `POST /radio/{radio_id}/cat/vfo` with body `{"vfo": "VFOB"}`
-- `GET /radio/{radio_id}/cat/swr` returns `{"swr": 1.5}`
-- `POST /radio/{radio_id}/cat/ctcss` with body `{"tone": 88.5}`
-
-Add WebSocket message types in `ws_control`: `vfo`, `ctcss`.
-
-**Done when**: All new endpoints return correct data in simulation mode. `uv run pytest` and `uv run mypy .` pass.
+**Acceptance criteria:**
+- GET returns defaults for a radio with no DSP config
+- PATCH with partial RX updates does not reset TX config
+- PATCH with invalid values returns 409 with problem details
+- Config file on disk reflects changes after PATCH
 
 ---
 
-### Task 6: Curated mode list per radio
+#### Task 03: RxDspChain -- highpass filter node (100-300 Hz)
 
-**Files**: `server/modes.py` (new), `server/routers/cat.py`
+**File:** `ui/src/lib/audio/rx-dsp-chain.ts` (new file)
 
-Create a module mapping Hamlib model numbers to supported mode lists:
+Create a new `RxDspChain` class that will replace the existing `DspChain`. This task creates the class skeleton and the first filter node.
 
-1. `HAMLIB_MODES: dict[int, list[str]]` -- maps model number to ordered list of supported modes. Include entries for common radios: IC-706mkiig (model 3009), FT-991A (model 36017), TS-590 (model 2029). Unknown models return a generic list: `["USB", "LSB", "CW", "CWR", "AM", "FM", "RTTY", "RTTYR", "PKTUSB", "PKTLSB"]`.
-2. `get_modes(hamlib_model: int) -> list[str]` -- returns the mode list for a model, falling back to generic.
-3. Add `GET /api/radio/{radio_id}/modes` endpoint in `cat.py` that returns `{"modes": [...]}` using the radio's `hamlib_model`.
+**Class structure:**
+```typescript
+export class RxDspChain {
+    private ctx: AudioContext;
+    // Node declarations
+    private highpassNode: BiquadFilterNode | null = null;
+    // ... (other nodes added in tasks 04-09)
 
-**Done when**: Endpoint returns correct mode list for known models and generic list for unknown. `uv run pytest` and `uv run mypy .` pass.
+    get input(): AudioNode { ... }  // first node in chain
+    get output(): AudioNode { ... } // last node in chain
 
----
+    async build(): Promise<void> { ... }
+    destroy(): void { ... }
+}
+```
 
-### Task 7: Frequency presets API
+**Highpass node:**
+- `BiquadFilterNode` with `type = 'highpass'`
+- Default frequency: 100 Hz
+- Bypassed by default: frequency set to 1 Hz (below audible range)
+- `setHighpass(freqHz: number)`: set cutoff frequency (clamped 50-500)
+- `enableHighpass(enabled: boolean)`: toggle; when disabled, freq = 1 Hz
+- `isHighpassEnabled(): boolean`
 
-**Files**: `server/routers/system.py`
-
-Add REST endpoints for preset management:
-
-1. `GET /api/presets` -- returns `{"presets": [...]}` from current config.
-2. `POST /api/presets` -- body is a single `PresetConfig`. Appends to config, saves, returns updated list.
-3. `PUT /api/presets/{preset_id}` -- updates an existing preset by ID. 404 if not found.
-4. `DELETE /api/presets/{preset_id}` -- removes a preset by ID. 404 if not found.
-5. `POST /api/presets/import` -- body is `{"presets": [...]}`. Replaces all presets. Returns updated list.
-6. `GET /api/presets/export` -- returns `{"presets": [...]}` (same as GET but semantically for file download).
-
-All mutations call `save_config()` after modifying the in-memory config. Validate preset band against current region's band plan.
-
-Update `ui/src/lib/api.ts` with typed functions: `getPresets()`, `createPreset()`, `updatePreset()`, `deletePreset()`, `importPresets()`, `exportPresets()`.
-
-**Done when**: All endpoints work, round-trip import/export preserves data, invalid band names are rejected. `uv run pytest` and `uv run mypy .` pass.
-
----
-
-### Task 8: Band plan API endpoint
-
-**Files**: `server/routers/system.py`
-
-Add `GET /api/bandplan` endpoint:
-- Returns `{"region": "us", "bands": [...]}` where bands is the list of `BandDef` objects for the current config's `operator.region`.
-- Uses `bandplan.get_bands()` from task 1.
-
-Add `getBandPlan()` to `ui/src/lib/api.ts`.
-
-**Done when**: Endpoint returns correct band data for the configured region. `uv run pytest` and `uv run mypy .` pass.
+**Acceptance criteria:**
+- Class instantiates with an AudioContext
+- `build()` creates the highpass BiquadFilterNode
+- Enable/disable toggles the effective cutoff
 
 ---
 
-### Task 9: Theme infrastructure (CSS custom properties)
+#### Task 04: RxDspChain -- lowpass filter node (2.5-3.5 kHz)
 
-**Files**: `ui/src/app.css` (new or extend existing global styles), `ui/src/lib/stores.ts`, `ui/src/lib/theme.ts` (new)
+**File:** `ui/src/lib/audio/rx-dsp-chain.ts`
 
-Create a theming system using CSS custom properties:
+Add lowpass filter node to `RxDspChain`.
 
-1. Define a `ThemeMode` type: `'light' | 'dark' | 'system'`.
-2. Create `ui/src/lib/theme.ts` with:
-   - `initTheme()`: reads preference from `localStorage` key `riglet-theme`, falls back to `prefers-color-scheme` media query. Sets `data-theme` attribute on `<html>`.
-   - `setTheme(mode: ThemeMode)`: persists to localStorage, updates `data-theme` attribute.
-   - `getTheme(): ThemeMode`: reads current setting.
-3. Define CSS custom properties in `ui/src/app.css` under `[data-theme="dark"]` (default) and `[data-theme="light"]` selectors. Properties include:
-   - `--bg-primary`, `--bg-secondary`, `--bg-surface`, `--bg-elevated`
-   - `--text-primary`, `--text-secondary`, `--text-muted`
-   - `--border-primary`, `--border-subtle`
-   - `--accent`, `--accent-hover`
-   - `--online-color`, `--offline-color`, `--ptt-color`
-   - `--waterfall-bg`
-4. Add a `theme` writable store to `stores.ts`.
-5. Do NOT yet migrate existing components to use these properties (that happens incrementally as each component is touched in later tasks). But ensure the properties are loaded at app startup.
+**Lowpass node:**
+- `BiquadFilterNode` with `type = 'lowpass'`
+- Default frequency: 3000 Hz
+- Bypassed by default: frequency set to `ctx.sampleRate / 2` (Nyquist)
+- `setLowpass(freqHz: number)`: set cutoff (clamped 1500-5000)
+- `enableLowpass(enabled: boolean)`: toggle; when disabled, freq = Nyquist
+- `isLowpassEnabled(): boolean`
 
-**Done when**: `initTheme()` correctly detects system preference, `setTheme('light')` switches all CSS variables, `npm run build` passes.
+Wire into chain: highpass -> lowpass -> (rest of chain)
 
 ---
 
-### Task 10: Accessibility foundation
+#### Task 05: RxDspChain -- peak filter node
 
-**Files**: Multiple component files in `ui/src/lib/components/`, `ui/src/routes/+page.svelte`
+**File:** `ui/src/lib/audio/rx-dsp-chain.ts`
 
-Add accessibility infrastructure across all existing components:
+Add peak (parametric EQ) filter node to `RxDspChain`.
 
-1. Add `role`, `aria-label`, `aria-live`, `aria-pressed` (for PTT), `aria-valuenow`/`aria-valuemin`/`aria-valuemax` (for sliders/meters) to all interactive elements.
-2. Add `tabindex` and keyboard event handlers (`on:keydown`) to all controls that currently only respond to click/mouse.
-3. Add a skip-to-content link at the top of `+page.svelte`.
-4. Ensure all color contrast ratios meet WCAG 2.1 AA in both themes (check against the CSS properties from task 9).
-5. Add `@media (prefers-reduced-motion: reduce)` rules to disable waterfall scrolling animation and meter transitions.
-6. `FrequencyDisplay`: arrow keys nudge frequency, Enter confirms.
-7. `BandSelector`: arrow keys navigate between bands, Enter/Space selects.
-8. `ModeSelector`: arrow keys navigate, Enter/Space selects.
-9. `PttButton`: Space/Enter toggles PTT. `aria-pressed` reflects state.
-10. `AudioControls` sliders: arrow keys adjust, Home/End for min/max.
+**Peak node:**
+- `BiquadFilterNode` with `type = 'peaking'`
+- Default: freq 1000 Hz, gain 0 dB, Q 1.0
+- Bypassed by default: gain = 0 dB (transparent)
+- `setPeak(freqHz: number, gainDb: number, q: number)`: set all params
+- `enablePeak(enabled: boolean)`: toggle; when disabled, gain = 0
+- `isPeakEnabled(): boolean`
 
-**Done when**: All interactive elements are keyboard-reachable via Tab. Screen reader (VoiceOver) announces frequency, mode, PTT state, S-meter reading. `npm run build` passes.
+Wire into chain: highpass -> lowpass -> peak -> (rest)
 
 ---
 
-### Task 11: Scroll-wheel mixin for dial controls
+#### Task 06: RxDspChain -- noise blanker node (biquad notch at 50/60 Hz)
 
-**Files**: `ui/src/lib/actions/scrollwheel.ts` (new)
+**File:** `ui/src/lib/audio/rx-dsp-chain.ts`
 
-Create a Svelte action (use directive) for scroll-wheel interaction:
+Add a power-line noise blanker to `RxDspChain`.
 
-1. `scrollWheel(node: HTMLElement, params: { onDelta: (delta: number) => void, step?: number })`: attaches a `wheel` event listener to the element.
-2. On `wheel` event, call `event.preventDefault()` (only when pointer is over the element) and invoke `onDelta(delta)` with +1 or -1 based on scroll direction.
-3. Apply to: `FrequencyDisplay` (scroll nudges freq by configurable step), `AudioControls` volume/gain sliders, and future dial controls.
-4. Respect `pointer-events` -- only capture when the element is hovered (use `pointerenter`/`pointerleave` to gate).
+**Noise blanker node:**
+- `BiquadFilterNode` with `type = 'notch'`
+- Default frequency: 50 Hz, Q = 30 (narrow notch)
+- Bypassed by default: Q = 0.01 (effectively transparent)
+- `setNoiseBlankerFreq(freq: 50 | 60)`: switch between 50 Hz and 60 Hz mains hum
+- `enableNoiseBlanker(enabled: boolean)`: toggle; when disabled, Q = 0.01
+- `isNoiseBlankerEnabled(): boolean`
 
-**Done when**: Scroll-wheel on FrequencyDisplay changes frequency. Scroll-wheel on volume slider changes volume. Scrolling elsewhere on the page does NOT get hijacked. `npm run build` passes.
-
----
-
-### Task 12: Visualization renderer interface
-
-**Files**: `ui/src/lib/viz/types.ts` (new), `ui/src/lib/viz/base-renderer.ts` (new)
-
-Define the pluggable visualization architecture:
-
-1. `VisualizationMode` type: `'waterfall' | 'spectrum' | 'oscilloscope' | 'constellation' | 'phase' | 'spectrogram3d'`
-2. `RendererContext` interface: `{ canvas: HTMLCanvasElement, ctx: CanvasRenderingContext2D, width: number, height: number, centerMhz: number, spanKhz: number, mode: string }`
-3. `Renderer` interface:
-   - `init(context: RendererContext): void` -- called once on mount
-   - `render(data: VisualizationData): void` -- called per frame
-   - `resize(width: number, height: number): void`
-   - `destroy(): void` -- cleanup
-4. `VisualizationData` interface: `{ fftBins: number[] | null, pcmSamples: Float32Array | null, sampleRate: number, timestamp: number }`
-5. `RendererRegistry`: a `Map<VisualizationMode, () => Renderer>` factory registry. Export `registerRenderer()` and `createRenderer()`.
-
-**Done when**: All interfaces and types compile. Registry can store and retrieve renderer factories. `npm run build` passes.
+Wire into chain: highpass -> lowpass -> peak -> noiseBlanker -> (rest)
 
 ---
 
-### Task 13: Refactor Waterfall to use renderer interface
+#### Task 07: RxDspChain -- notch filter node (auto/manual)
 
-**Files**: `ui/src/lib/viz/waterfall-renderer.ts` (new), `ui/src/lib/components/Waterfall.svelte`, `ui/src/lib/components/VisualizationPanel.svelte` (new)
+**File:** `ui/src/lib/audio/rx-dsp-chain.ts`
 
-1. Extract the rendering logic from `Waterfall.svelte` into `waterfall-renderer.ts` implementing the `Renderer` interface from task 12.
-   - `init()`: allocate ImageData, set up color map.
-   - `render()`: scroll-and-draw logic (currently in `scrollAndDraw()`).
-   - `resize()`: reallocate ImageData.
-   - `destroy()`: cleanup.
+Add a notch filter with manual and auto modes to `RxDspChain`.
 
-2. Create `VisualizationPanel.svelte` -- a generic container component that:
-   - Accepts a `mode: VisualizationMode` prop and a `radioId: string` prop.
-   - Manages the canvas element and `ResizeObserver`.
-   - Connects to the waterfall WebSocket for FFT data.
-   - Instantiates the correct renderer from the registry.
-   - Calls `renderer.render()` on each data frame.
-   - Supports switching renderers at runtime (destroy old, init new).
+**Notch node:**
+- `BiquadFilterNode` with `type = 'notch'`
+- Manual mode: operator sets center frequency and Q
+- Auto mode: placeholder for future tone detection (for now, defaults to 1000 Hz; auto-detect logic is out of scope for this task -- set a TODO comment)
+- Default: freq 1000 Hz, Q = 10
+- Bypassed by default: Q = 0.01
+- `setNotch(centerHz: number, q: number)`: manual params
+- `setNotchMode(mode: 'manual' | 'auto')`: store mode flag
+- `enableNotch(enabled: boolean)`: toggle; when disabled, Q = 0.01
+- `isNotchEnabled(): boolean`
+- `getNotchMode(): 'manual' | 'auto'`
 
-3. Update `+page.svelte` to use `VisualizationPanel` instead of `Waterfall` directly.
-
-4. Register `waterfall-renderer` in the `RendererRegistry`.
-
-**Done when**: Waterfall displays identically to before. The old `Waterfall.svelte` can be deleted or is now a thin wrapper. `npm run build` passes. No visual regression.
+Wire into chain: highpass -> lowpass -> peak -> noiseBlanker -> notch -> (rest)
 
 ---
 
-### Task 14: Spectrum scope renderer
+#### Task 08: RxDspChain -- bandpass filter (presets + manual range)
 
-**Files**: `ui/src/lib/viz/spectrum-renderer.ts` (new)
+**File:** `ui/src/lib/audio/rx-dsp-chain.ts`
 
-Implement a spectrum scope (frequency vs. amplitude) renderer:
+Add a bandpass filter with presets to `RxDspChain`.
 
-1. Implements `Renderer` interface.
-2. `render()`: draws FFT bins as a filled line graph. X-axis = frequency (left to right), Y-axis = amplitude (bottom to top).
-3. Color: green line on dark background (respect theme CSS variables).
-4. Optional peak-hold trace: a second line (in dimmer color) that decays slowly, showing recent maximum values per bin.
-5. Frequency axis labels along the bottom (reuse center/span from RendererContext).
-6. Amplitude axis labels along the left (-120 dB to 0 dB range, adjustable).
-7. Register in `RendererRegistry` under key `'spectrum'`.
+**Bandpass node:**
+- `BiquadFilterNode` with `type = 'bandpass'`
+- Presets:
+  - `"voice"`: center 1500 Hz, width 2400 Hz (Q = 1500/2400 = 0.625)
+  - `"cw"`: center 700 Hz, width 500 Hz (Q = 1.4)
+  - `"manual"`: operator-specified center and width
+- Default: voice preset
+- Bypassed by default: Q = 0.01 (wide open)
+- `setBandpassPreset(preset: 'voice' | 'cw' | 'manual')`: apply preset center/width
+- `setBandpass(centerHz: number, widthHz: number)`: manual params (also sets preset to 'manual')
+- `enableBandpass(enabled: boolean)`: toggle; when disabled, Q = 0.01
+- `isBandpassEnabled(): boolean`
+- `getBandpassPreset(): string`
 
-**Done when**: Spectrum scope renders real-time FFT data. Peak hold trace visible and decaying. `npm run build` passes.
-
----
-
-### Task 15: Oscilloscope renderer
-
-**Files**: `ui/src/lib/viz/oscilloscope-renderer.ts` (new)
-
-Implement a time-domain waveform renderer:
-
-1. Implements `Renderer` interface.
-2. `render()`: draws PCM samples as a continuous waveform. X-axis = time, Y-axis = amplitude (-1 to +1).
-3. Trigger: simple zero-crossing trigger to stabilize the display.
-4. Color: green trace on dark background (theme-aware).
-5. Graticule: horizontal center line, vertical time divisions.
-6. Register in `RendererRegistry` under key `'oscilloscope'`.
-
-Note: This renderer uses `VisualizationData.pcmSamples` rather than `fftBins`. The `VisualizationPanel` must also provide raw PCM data from the audio WebSocket to renderers that need it.
-
-**Done when**: Oscilloscope renders time-domain audio waveform with stable triggering. `npm run build` passes.
+Wire into chain: highpass -> lowpass -> peak -> noiseBlanker -> notch -> bandpass -> (rest)
 
 ---
 
-### Task 16: Constellation renderer
+#### Task 09: RxDspChain -- DSP noise reduction AudioWorklet
 
-**Files**: `ui/src/lib/viz/constellation-renderer.ts` (new)
+**File:** `ui/src/lib/audio/rx-dsp-chain.ts` (node integration) and `ui/static/nr-worklet.js` (already exists, verify compatibility)
 
-Implement a constellation / goniometer (X-Y plot) renderer:
+Add NR AudioWorklet node to `RxDspChain`.
 
-1. Implements `Renderer` interface.
-2. `render()`: plots successive PCM sample pairs as (x, y) dots on a circular display. For mono audio, use sample[n] vs sample[n+1] (phase space plot).
-3. Dot persistence: dots fade over time (trail effect) using alpha blending on the canvas.
-4. Graticule: crosshair at center, circular boundary.
-5. Register in `RendererRegistry` under key `'constellation'`.
+**NR node:**
+- Reuse existing `nr-worklet.js` processor (spectral subtraction)
+- Load via `ctx.audioWorklet.addModule('/nr-worklet.js')` (best-effort, graceful fallback if unavailable)
+- `setNrAmount(amount: number)`: 0.0-1.0 via AudioParam `'amount'`
+- `enableNr(enabled: boolean)`: via AudioParam `'enabled'` (0/1)
+- `isNrEnabled(): boolean`
+- `isNrAvailable(): boolean`
+- If worklet fails to load, skip NR node in chain wiring (connect previous node directly to next)
 
-**Done when**: Constellation displays phase-space plot of audio signal. `npm run build` passes.
+Wire into chain: highpass -> lowpass -> peak -> noiseBlanker -> notch -> bandpass -> NR -> output
 
----
-
-### Task 17: Phase/correlation meter renderer
-
-**Files**: `ui/src/lib/viz/phase-renderer.ts` (new)
-
-Implement a phase correlation meter:
-
-1. Implements `Renderer` interface.
-2. `render()`: computes autocorrelation of the PCM signal and displays as a horizontal bar meter ranging from -1 (out of phase) through 0 (uncorrelated) to +1 (in phase).
-3. Needle or filled bar indicator with color coding: green (+1 region), yellow (0 region), red (-1 region).
-4. Register in `RendererRegistry` under key `'phase'`.
-
-**Done when**: Phase meter renders and responds to audio signal characteristics. `npm run build` passes.
+**Final full chain order:**
+`input(highpass) -> lowpass -> peak -> noiseBlanker -> notch -> bandpass -> NR -> output`
 
 ---
 
-### Task 18: Visualization mode switcher UI
+#### Task 10: Wire RxDspChain into AudioManager RX playback path
 
-**Files**: `ui/src/lib/components/VizSwitcher.svelte` (new), `ui/src/lib/components/VisualizationPanel.svelte`
+**Files:**
+- `ui/src/lib/audio/audio-manager.ts`
+- `ui/src/lib/audio/rx-dsp-chain.ts`
 
-Create a mode-switching control for the visualization area:
+Replace the existing `DspChain` import and usage with `RxDspChain`.
 
-1. `VizSwitcher.svelte`: a row of icon/label buttons for each available `VisualizationMode`. Highlights the active mode. Emits a `select` event with the chosen mode.
-2. Integrate into `VisualizationPanel.svelte`: place the switcher above or overlapping the top of the canvas area.
-3. When the user selects a new mode, `VisualizationPanel` destroys the current renderer and instantiates the new one.
-4. Keyboard accessible: arrow keys navigate modes, Enter/Space selects.
-5. The spectrum scope can optionally overlay any other visualization (toggled by a separate checkbox/button). When overlaid, both renderers draw to the same canvas in sequence.
+**Changes to AudioManager:**
+- Replace `import { DspChain }` with `import { RxDspChain }`
+- Replace `private dspChain: DspChain | null` with `private rxDspChain: RxDspChain | null`
+- In `init()`: instantiate `RxDspChain`, call `await rxDspChain.build()`, wire:
+  `workletNode -> rxDspChain.input` and `rxDspChain.output -> squelchNode -> gainNode -> destination`
+- Expose `getRxDspChain(): RxDspChain | null` getter for UI components to call
+- In `destroy()`: call `rxDspChain.destroy()`
+- Remove old `DspChain` references
 
-**Done when**: User can switch between waterfall, spectrum, oscilloscope, constellation, and phase meter. Transitions are smooth (no flash/glitch). `npm run build` passes.
+**Backward compatibility:**
+- The existing `DspPanel.svelte` component imports `DspChain` type. Update its import to `RxDspChain` and adjust property access to match new API.
+- Ensure all existing DSP panel functionality (bandpass, notch, NR, compressor, EQ) still works via the new chain
 
----
-
-### Task 19: LUFS audio meter component
-
-**Files**: `ui/src/lib/components/LufsMeter.svelte` (new), `ui/src/lib/audio/lufs.ts` (new)
-
-Create an always-visible audio loudness meter:
-
-1. `lufs.ts`: implement LUFS (Loudness Units Full Scale) measurement per ITU-R BS.1770:
-   - K-weighting filter (two biquad stages).
-   - Momentary loudness (400ms window).
-   - Short-term loudness (3s window).
-   - Integrated loudness (entire measurement period).
-   - Accept Float32Array PCM input, return LUFS value.
-2. `LufsMeter.svelte`:
-   - Vertical bar meter with color gradient: green (quiet) -> yellow (moderate) -> red (loud).
-   - Peak-hold indicator: a horizontal line that marks the maximum level and decays slowly (e.g., 3 dB/sec fall rate, or holds for 2 seconds then drops).
-   - Numeric LUFS readout below the bar.
-   - Displayed alongside the visualization area (not inside it).
-   - Receives PCM data from the audio pipeline (passed as prop or via store).
-3. Integrate into `+page.svelte` layout: position to the right of the visualization panel or as a narrow vertical strip.
-
-**Done when**: LUFS meter updates in real time from RX audio. Peak hold shows and decays. Meter is always visible. `npm run build` passes.
+**Acceptance criteria:**
+- Audio plays through the RX DSP chain
+- All existing DSP controls still function
+- No TypeScript errors from `npm run build`
 
 ---
 
-### Task 20: Waterfall cursor (passband overlay)
+#### Task 11: TxDspChain -- highpass + lowpass filter nodes
 
-**Files**: `ui/src/lib/viz/waterfall-renderer.ts`, `ui/src/lib/viz/cursor.ts` (new)
+**File:** `ui/src/lib/audio/tx-dsp-chain.ts` (new file)
 
-Add a passband cursor overlay to the waterfall:
+Create a new `TxDspChain` class for the TX audio path.
 
-1. `cursor.ts`: `PassbandCursor` class that:
-   - Accepts: `centerFreqMhz`, `cursorFreqMhz`, `mode`, `spanKhz`, `canvasWidth`.
-   - Computes passband width based on mode: USB/LSB = 2.4 kHz, CW = 0.5 kHz, AM = 6 kHz, FM = 12 kHz, RTTY = 0.5 kHz. Mode-to-bandwidth map is configurable.
-   - Computes pixel positions for the passband region.
-   - For SSB: passband extends from carrier on one side only (USB = above, LSB = below).
-   - For AM/FM: passband is centered.
-   - Returns `{ leftPx: number, rightPx: number, centerPx: number }`.
-2. In `waterfall-renderer.ts`, after drawing the waterfall, draw the cursor overlay:
-   - Semi-transparent highlight over the passband region.
-   - Dim the area outside the passband.
-   - Draw a thin vertical line at the cursor center/edge.
-3. The cursor position reflects the current tuned frequency relative to the waterfall center.
+**Class structure:**
+```typescript
+export class TxDspChain {
+    private ctx: AudioContext;
+    private highpassNode: BiquadFilterNode | null = null;
+    private lowpassNode: BiquadFilterNode | null = null;
+    // ... (other nodes in tasks 12-15)
 
-**Done when**: Passband overlay is visible on the waterfall, adapts to mode changes, and tracks frequency. `npm run build` passes.
+    get input(): AudioNode { ... }
+    get output(): AudioNode { ... }
 
----
+    async build(): Promise<void> { ... }
+    destroy(): void { ... }
+}
+```
 
-### Task 21: Waterfall cursor drag-to-tune
+**Highpass node:**
+- `BiquadFilterNode`, `type = 'highpass'`, default 100 Hz
+- Bypassed by default: freq = 1 Hz
+- `setHighpass(freqHz: number)`, `enableHighpass(enabled: boolean)`, `isHighpassEnabled(): boolean`
 
-**Files**: `ui/src/lib/viz/cursor.ts`, `ui/src/lib/components/VisualizationPanel.svelte`
+**Lowpass node:**
+- `BiquadFilterNode`, `type = 'lowpass'`, default 3000 Hz
+- Bypassed by default: freq = Nyquist
+- `setLowpass(freqHz: number)`, `enableLowpass(enabled: boolean)`, `isLowpassEnabled(): boolean`
 
-Make the waterfall cursor draggable to change frequency:
-
-1. Add mouse event handlers to the canvas in `VisualizationPanel`:
-   - `mousedown` on the passband region starts a drag.
-   - `mousemove` during drag updates the cursor position and computes the new frequency from pixel offset.
-   - `mouseup` ends the drag and sends the frequency change via the control WebSocket.
-2. Cursor changes to `grab` / `grabbing` during interaction.
-3. Also support click-to-tune: clicking anywhere on the waterfall tunes to that frequency.
-4. Touch support: same behavior with `touchstart` / `touchmove` / `touchend`.
-5. Scroll-wheel on the waterfall: zoom the span (narrow/widen the visible bandwidth). Use the scroll-wheel action from task 11.
-
-**Done when**: Dragging the cursor changes the radio frequency. Click-to-tune works. Touch works. `npm run build` passes.
+Wire: highpass -> lowpass -> output
 
 ---
 
-### Task 22: Client-side DSP -- volume + squelch nodes
+#### Task 12: TxDspChain -- 3-band EQ (3x BiquadFilterNode)
 
-**Files**: `ui/src/lib/audio/audio-manager.ts`, `ui/src/lib/audio/squelch-worklet.js` (new)
+**File:** `ui/src/lib/audio/tx-dsp-chain.ts`
 
-Extend `AudioManager` with volume and squelch processing:
+Add 3-band EQ to `TxDspChain`.
 
-1. **Volume**: Already exists as a `GainNode`. Ensure it is exposed with `getVolume()` and `setVolume(v: number)` (0.0 to 1.0). No change needed here beyond verification.
+**Nodes:**
+- `bassNode`: `BiquadFilterNode`, `type = 'lowshelf'`, freq 200 Hz, default gain 0 dB
+- `midNode`: `BiquadFilterNode`, `type = 'peaking'`, freq 1000 Hz, Q 1.0, default gain 0 dB
+- `trebleNode`: `BiquadFilterNode`, `type = 'highshelf'`, freq 3000 Hz, default gain 0 dB
+- Bypassed by default: all gains = 0 dB
+- `setBass(gainDb: number)`, `setMid(gainDb: number)`, `setTreble(gainDb: number)`: range -20 to +20
+- `enableEq(enabled: boolean)`: toggle; when disabled, all gains = 0
+- `isEqEnabled(): boolean`
 
-2. **Squelch**: Create `squelch-worklet.js` AudioWorkletProcessor:
-   - Parameters: `threshold` (dBFS, default -80), `holdMs` (default 300).
-   - Logic: compute RMS of each 128-sample block. If RMS < threshold, gate output to zero. Hold open for `holdMs` after last above-threshold block.
-   - Register as `'squelch-processor'`.
-3. In `AudioManager`:
-   - Add `squelchNode: AudioWorkletNode` in the RX chain between the existing worklet and the gain node.
-   - Add `setSquelch(thresholdDb: number)` method that sets the parameter.
-   - Add `squelchEnabled: boolean` with `enableSquelch()` / `disableSquelch()` to bypass the node.
-4. Audio chain order: PCM worklet -> squelch -> gain -> destination.
-
-**Done when**: Setting squelch threshold gates quiet audio. Volume control still works. `npm run build` passes.
+Wire: highpass -> lowpass -> bass -> mid -> treble -> (rest)
 
 ---
 
-### Task 23: Client-side DSP -- bandpass + notch filters
+#### Task 13: TxDspChain -- vocal compressor (DynamicsCompressorNode)
 
-**Files**: `ui/src/lib/audio/audio-manager.ts`, `ui/src/lib/audio/dsp-chain.ts` (new)
+**File:** `ui/src/lib/audio/tx-dsp-chain.ts`
 
-Add configurable filter nodes:
+Add vocal compressor with presets to `TxDspChain`.
 
-1. Create `dsp-chain.ts` -- a `DspChain` class managing the ordered sequence of AudioNodes:
-   - `bandpassNode: BiquadFilterNode` (type `'bandpass'`, configurable center freq + Q).
-   - `notchNode: BiquadFilterNode` (type `'notch'`, configurable center freq + Q).
-   - Methods: `setBandpass(centerHz: number, widthHz: number)`, `setNotch(centerHz: number, widthHz: number)`, `enableBandpass(enabled: boolean)`, `enableNotch(enabled: boolean)`.
-   - Chain is inserted into the AudioManager RX path.
-2. Integrate `DspChain` into `AudioManager`:
-   - Chain order: PCM worklet -> bandpass -> notch -> squelch -> gain -> destination.
-   - Each node can be bypassed (disconnected from chain, reconnect neighbors).
-3. Default state: all filters bypassed.
+**Compressor node:**
+- `DynamicsCompressorNode`
+- Presets (define as a `Record<string, CompressorParams>` constant):
+  - `"light"`: threshold -20, ratio 2, attack 0.003, release 0.25
+  - `"medium"`: threshold -24, ratio 4, attack 0.003, release 0.25
+  - `"heavy"`: threshold -30, ratio 8, attack 0.001, release 0.1
+  - `"manual"`: use whatever the operator sets
+- Bypassed by default: ratio = 1, threshold = 0
+- `setCompressorPreset(preset: 'light' | 'medium' | 'heavy' | 'manual')`: apply preset values
+- `setCompressor(threshold: number, ratio: number, attack: number, release: number)`: manual params (also sets preset to 'manual')
+- `enableCompressor(enabled: boolean)`: toggle
+- `isCompressorEnabled(): boolean`
+- `getCompressorPreset(): string`
 
-**Done when**: Bandpass filter audibly filters audio when enabled. Notch filter removes a specific tone. Bypassing restores full audio. `npm run build` passes.
-
----
-
-### Task 24: Client-side DSP -- noise reduction worklet
-
-**Files**: `ui/src/lib/audio/nr-worklet.js` (new), `ui/src/lib/audio/dsp-chain.ts`
-
-Implement spectral subtraction noise reduction:
-
-1. `nr-worklet.js` AudioWorkletProcessor:
-   - Parameters: `amount` (0.0 to 1.0, default 0.5).
-   - Algorithm: collect 256-sample frames, FFT (use a simple DFT or precomputed twiddle factors since AudioWorklet cannot import numpy), estimate noise floor from quiet periods, subtract scaled noise spectrum, IFFT, overlap-add.
-   - Simpler alternative if FFT is too complex for worklet: use a Wiener filter approximation with exponential moving average of noise spectrum.
-   - Register as `'nr-processor'`.
-2. Add `nrNode: AudioWorkletNode` to `DspChain`.
-3. Chain order: PCM worklet -> bandpass -> notch -> NR -> squelch -> gain -> destination.
-4. Methods: `setNrAmount(amount: number)`, `enableNr(enabled: boolean)`.
-
-**Done when**: Noise reduction audibly reduces background noise. Amount parameter controls aggressiveness. `npm run build` passes.
+Wire: ... -> treble -> compressor -> (rest)
 
 ---
 
-### Task 25: Client-side DSP -- compressor + 3-band EQ
+#### Task 14: TxDspChain -- limiter stage (DynamicsCompressorNode, high ratio)
 
-**Files**: `ui/src/lib/audio/dsp-chain.ts`
+**File:** `ui/src/lib/audio/tx-dsp-chain.ts`
 
-Add dynamics and EQ processing:
+Add a limiter as the last dynamics stage in `TxDspChain`.
 
-1. **Compressor** (for TX path): `DynamicsCompressorNode` with configurable threshold, ratio, attack, release.
-   - Methods: `setCompressor(threshold: number, ratio: number)`, `enableCompressor(enabled: boolean)`.
-   - Insert into TX audio chain in `AudioManager`: mic source -> compressor -> PCM worklet.
+**Limiter node:**
+- `DynamicsCompressorNode` configured as a hard limiter
+- Default: threshold -3 dBFS, ratio 20, knee 0, attack 0.001s, release 0.01s
+- Bypassed by default: ratio = 1, threshold = 0
+- `setLimiterThreshold(thresholdDb: number)`: range -20 to 0
+- `enableLimiter(enabled: boolean)`: toggle
+- `isLimiterEnabled(): boolean`
 
-2. **3-band EQ** (for RX path): three `BiquadFilterNode` instances:
-   - Low shelf: 300 Hz, configurable gain (-12 to +12 dB).
-   - Peaking: 1000 Hz, configurable gain.
-   - High shelf: 3000 Hz, configurable gain.
-   - Methods: `setEqBand(band: 'low' | 'mid' | 'high', gainDb: number)`, `enableEq(enabled: boolean)`.
-   - Insert into RX chain: ... -> NR -> EQ -> squelch -> gain -> destination.
-
-3. Chain order (final RX): PCM worklet -> bandpass -> notch -> NR -> EQ low -> EQ mid -> EQ high -> squelch -> gain -> destination.
-4. Chain order (final TX): mic source -> compressor -> PCM worklet (TX capture).
-
-**Done when**: Compressor affects TX audio dynamics. EQ audibly changes tone of RX audio. All can be bypassed. `npm run build` passes.
+Wire: ... -> compressor -> limiter -> (rest)
 
 ---
 
-### Task 26: DSP controls panel component
+#### Task 15: TxDspChain -- noise gate (threshold-based gate node)
 
-**Files**: `ui/src/lib/components/DspPanel.svelte` (new)
+**File:** `ui/src/lib/audio/tx-dsp-chain.ts`
 
-Create a UI panel for all DSP parameters:
+Add a noise gate to `TxDspChain`.
 
-1. Sections: Filters (bandpass center/width, notch center/width), Noise Reduction (amount slider), EQ (3 band sliders), Compressor (threshold/ratio).
-2. Each section has an enable/disable toggle.
-3. All sliders use `<input type="range">` with ARIA labels and keyboard support.
-4. Apply the scroll-wheel action from task 11 to all sliders.
-5. Collapsible panel (click header to expand/collapse).
-6. Changes apply in real time by calling `DspChain` methods.
-7. Integrate into the controls column in `+page.svelte`.
+**Gate implementation:**
+- Use a `GainNode` (gateNode) whose gain is snapped to 0 or 1
+- Use an `AnalyserNode` feeding a periodic check (via `requestAnimationFrame` or a `setInterval` at 50ms) that computes RMS of the input signal
+- If RMS (in dBFS) is above `gateThreshold`, gain = 1 (open); otherwise gain = 0 (closed)
+- Add a hold timer (default 100ms) to prevent chatter
+- `setGateThreshold(thresholdDb: number)`: range -100 to 0
+- `enableGate(enabled: boolean)`: toggle; when disabled, gain always = 1
+- `isGateEnabled(): boolean`
+- `destroy()` must clear the interval/RAF
 
-**Done when**: All DSP parameters are adjustable via the panel. Toggling sections enables/disables the corresponding audio nodes. `npm run build` passes.
+**Final full TX chain order:**
+`input(highpass) -> lowpass -> bass -> mid -> treble -> compressor -> limiter -> gateAnalyser + gateNode -> output`
 
----
+The analyser taps the signal before the gate node for level measurement.
 
-### Task 27: TX visualization switching
-
-**Files**: `ui/src/lib/components/VisualizationPanel.svelte`, `ui/src/lib/audio/audio-manager.ts`
-
-Show transmitted audio in the visualization during PTT:
-
-1. In `AudioManager`, expose TX audio data (PCM samples from the microphone) via a callback or store, similar to how RX data feeds the visualization.
-2. In `VisualizationPanel`, when PTT is active:
-   - Switch the data source from RX audio/FFT to TX audio.
-   - The active renderer continues to render but with TX data.
-   - Add a visual indicator ("TX" badge) on the visualization area.
-3. When PTT is released, switch back to RX data.
-4. For the waterfall renderer specifically, run a client-side FFT on the TX PCM to generate FFT bins (since the server only sends RX FFT).
-
-**Done when**: During PTT, the visualization shows the operator's transmitted audio. Visual TX indicator is present. Switching is seamless. `npm run build` passes.
+Wire: ... -> limiter -> analyser (tap) -> gateNode -> output
 
 ---
 
-### Task 28: VOX mode with hot-mic prevention
+#### Task 16: Wire TxDspChain into AudioManager TX capture path
 
-**Files**: `ui/src/lib/audio/vox.ts` (new), `ui/src/lib/audio/audio-manager.ts`, `ui/src/lib/components/PttButton.svelte`
+**File:** `ui/src/lib/audio/audio-manager.ts`
 
-Implement voice-activated transmit:
+Insert `TxDspChain` into the TX audio path, between the microphone source and the PCM worklet node.
 
-1. `vox.ts`: `VoxDetector` class:
-   - Constructor params: `thresholdDb: number` (default -30), `hangTimeMs: number` (default 500), `antiVoxDelayMs: number` (default 100).
-   - Method `process(pcmSamples: Float32Array): boolean` -- returns true if voice detected (above threshold, or within hang time).
-   - Anti-VOX: ignore mic input briefly after RX audio plays (prevents feedback loop from triggering PTT).
-   - Hot-mic prevention: require the level to exceed threshold for at least `antiVoxDelayMs` before triggering (prevents transient noise from keying up).
-2. In `AudioManager`:
-   - Add `VoxDetector` instance.
-   - When VOX is enabled, monitor TX audio in the PCM worklet's `tx` messages. If `VoxDetector.process()` returns true, send PTT on via control WebSocket. When it returns false (hang time expired), send PTT off.
-3. In `PttButton.svelte`:
-   - Add VOX mode toggle button.
-   - When VOX active, show "VOX" label and a visual indicator of mic activity.
-   - Manual PTT button still works alongside VOX.
-4. VOX is disabled by default.
+**Changes to AudioManager:**
+- Add `import { TxDspChain }` from `./tx-dsp-chain.js`
+- Add `private txDspChain: TxDspChain | null = null`
+- In TX start path (where `micSource` is connected):
+  - Instantiate `TxDspChain`, call `await txDspChain.build()`
+  - Wire: `micSource -> txDspChain.input` and `txDspChain.output -> workletNode` (TX input)
+  - Previously: `micSource -> workletNode` directly
+- Expose `getTxDspChain(): TxDspChain | null` getter
+- In TX stop / `destroy()`: call `txDspChain.destroy()`
 
-**Done when**: VOX mode correctly keys PTT on voice. Hot-mic prevention works (brief noise does not trigger). Hang time works. Manual PTT overrides. `npm run build` passes.
-
----
-
-### Task 29: Region-aware BandSelector component
-
-**Files**: `ui/src/lib/components/BandSelector.svelte`
-
-Refactor the BandSelector to be region-aware:
-
-1. Accept new props: `region: string`, `enabledBands: string[]` (from radio config).
-2. Fetch band list from `bandplan.ts` (task 1) for the given region.
-3. Render a pill for every band in the region (not just HF).
-4. Bands in `enabledBands` are interactive and fully styled.
-5. Bands NOT in `enabledBands` are greyed out, non-interactive, with a tooltip "Not enabled for this radio".
-6. Active band (matching current frequency) is highlighted.
-7. Include VHF/UHF bands (6m, 2m, 70cm) when present in the region.
-8. Keyboard navigable (arrow keys between pills).
-
-**Done when**: All region bands shown. Non-enabled bands are visually distinct and non-clickable. Active band highlights correctly. `npm run build` passes.
+**Acceptance criteria:**
+- TX audio passes through the TX DSP chain
+- When all TX DSP stages are disabled (default), audio is bit-identical to bypass
+- No TypeScript errors from `npm run build`
 
 ---
 
-### Task 30: Frequency presets UI
+#### Task 17: RxDspPillRow component
 
-**Files**: `ui/src/lib/components/PresetSelector.svelte` (new), `ui/src/lib/components/FrequencyDisplay.svelte`
+**File:** `ui/src/lib/components/RxDspPillRow.svelte` (new file)
 
-Create UI for frequency presets:
+A horizontal row of pill-shaped buttons, one per RX DSP stage, displayed below the frequency display.
 
-1. `PresetSelector.svelte`:
-   - Dropdown or pill list of presets, grouped by band.
-   - Selecting a preset sends frequency (and optionally mode/CTCSS) to the radio via control WebSocket.
-   - "Add preset" button: saves current frequency/mode as a new preset (opens a name input).
-   - "Manage presets" opens a modal for edit/delete/import/export.
-   - Import: file picker for JSON. Export: triggers JSON file download.
-2. In `FrequencyDisplay.svelte`:
-   - When the current frequency matches a preset, show the preset name as a small label below or beside the frequency readout.
-   - Match tolerance: within 1 kHz of preset frequency.
-3. Integrate `PresetSelector` into the radio header area in `+page.svelte`.
+**Props:**
+- `rxDspChain: RxDspChain | null`
 
-**Done when**: Presets can be created, selected, edited, deleted, imported, and exported via the UI. Active preset label shows in frequency display. `npm run build` passes.
+**Pills (one per filter):**
+- Highpass, Lowpass, Peak, NB (noise blanker), Notch, Bandpass, NR
+- Each pill shows the filter name (abbreviated)
+- Active (enabled) pills use an accent color (e.g., `bg-sky-500 text-white`)
+- Inactive pills use a muted style (e.g., `bg-gray-700 text-gray-400`)
+- Click on a pill opens the `RxDspPopover` for that filter (Task 18)
+- If `rxDspChain` is null, all pills are disabled/grayed
 
----
-
-### Task 31: Layout system -- schema + persistence
-
-**Files**: `ui/src/lib/layout/types.ts` (new), `ui/src/lib/layout/store.ts` (new), `ui/src/lib/layout/defaults.ts` (new)
-
-Define the layout configuration system:
-
-1. `types.ts`:
-   - `LayoutPanel` interface: `{ id: string, component: string, position: { row: number, col: number, rowSpan: number, colSpan: number } }`.
-   - `LayoutConfig` interface: `{ id: string, name: string, columns: number, rows: number, panels: LayoutPanel[] }`.
-   - `component` values: `'visualization'`, `'frequency'`, `'band-selector'`, `'mode-selector'`, `'ptt'`, `'smeter'`, `'audio'`, `'dsp'`, `'lufs-meter'`, `'presets'`, `'vfo'`, `'cat-extended'`.
-2. `defaults.ts`:
-   - `DEFAULT_LAYOUTS: LayoutConfig[]` with at least three presets: "Voice Operating" (emphasizes waterfall + PTT), "Digital Modes" (smaller waterfall, more controls), "SWL" (large waterfall, no TX controls).
-3. `store.ts`:
-   - Svelte writable store for current `LayoutConfig`.
-   - `loadLayout(id: string)`: load from localStorage key `riglet-layout-{id}`.
-   - `saveLayout(layout: LayoutConfig)`: persist to localStorage.
-   - `listLayouts(): { id: string, name: string, isDefault: boolean }[]`: list all available (default + custom).
-   - `exportLayout(layout: LayoutConfig): string`: serialize to JSON string.
-   - `importLayout(json: string): LayoutConfig`: parse and validate.
-   - `deleteLayout(id: string)`: remove from localStorage (cannot delete defaults).
-
-**Done when**: Layout configs can be created, saved, loaded, exported, and imported. Default layouts exist. `npm run build` passes.
+**Accessibility:**
+- Each pill is a `<button>` with `aria-pressed` reflecting enabled state
+- Keyboard navigable (tab order)
 
 ---
 
-### Task 32: Layout system -- save/load/export/import UI
+#### Task 18: RxDspPopover component
 
-**Files**: `ui/src/lib/components/LayoutManager.svelte` (new)
+**File:** `ui/src/lib/components/RxDspPopover.svelte` (new file)
 
-Create the layout management UI:
+A popover/dropdown panel that appears when an RX DSP pill is clicked, showing controls for that specific filter.
 
-1. A toolbar button (gear icon or layout icon) in the topbar opens a dropdown/panel.
-2. List of available layouts (defaults + custom) with select, rename, delete actions.
-3. "Save current" button to save the active layout.
-4. "Save as new" button to clone the current layout with a new name.
-5. "Export" button: downloads the layout as a `.json` file.
-6. "Import" button: file picker to load a `.json` layout file.
-7. Confirmation dialog before deleting custom layouts.
-8. Integrate into the topbar in `+page.svelte`.
+**Props:**
+- `rxDspChain: RxDspChain | null`
+- `filter: 'highpass' | 'lowpass' | 'peak' | 'noiseBlanker' | 'notch' | 'bandpass' | 'nr'`
+- `open: boolean` (bindable)
+- `anchor: HTMLElement | null` (for positioning)
 
-**Done when**: Full layout management CRUD works through the UI. Import/export produces valid JSON files. `npm run build` passes.
+**Content per filter:**
+- **Highpass**: on/off toggle, frequency slider (50-500 Hz)
+- **Lowpass**: on/off toggle, frequency slider (1500-5000 Hz)
+- **Peak**: on/off toggle, frequency slider, gain slider (-20 to +20 dB), Q slider (0.1-30)
+- **Noise Blanker**: on/off toggle, 50/60 Hz radio buttons
+- **Notch**: on/off toggle, mode selector (manual/auto), frequency slider, Q slider
+- **Bandpass**: on/off toggle, preset pills (voice/CW/manual), center+width sliders (when manual)
+- **NR**: on/off toggle, amount slider (0-100%)
 
----
+**Behavior:**
+- Changes apply immediately to `rxDspChain` (call the appropriate setter)
+- Emit a `change` event with the current filter state (for persistence layer, Task 24)
+- Close on click-outside or Escape key
 
-### Task 33: Main page layout refactor for configurable panels
-
-**Files**: `ui/src/routes/+page.svelte`
-
-Refactor the main page to render panels dynamically from the active `LayoutConfig`:
-
-1. Replace the hardcoded two-column grid with a CSS Grid driven by `LayoutConfig.columns` and `LayoutConfig.rows`.
-2. Each `LayoutPanel` is rendered as a grid item at its configured position/span.
-3. A component registry maps `panel.component` string to the actual Svelte component (using `{#if}` chains or a `<svelte:component>` approach).
-4. The visualization panel, frequency display, band selector, mode selector, PTT, S-meter, audio controls, DSP panel, LUFS meter, preset selector, and extended CAT controls are all renderable panels.
-5. Panels that are not in the current layout are simply not rendered.
-6. The layout adapts to screen size -- on narrow screens, collapse to a single column.
-
-**Done when**: The default "Voice Operating" layout renders identically to the current hardcoded layout. Switching to "Digital Modes" or "SWL" produces a different arrangement. `npm run build` passes.
+**Accessibility:**
+- Focus trap when open
+- Escape closes
+- Sliders use `<input type="range">` with `aria-label`
 
 ---
 
-### Task 34: Virtual device passthrough documentation
+#### Task 19: TxDspPanel component
 
-**Files**: `docs/virtual-passthrough.md` (new), `server/scripts/` (new directory, optional helper scripts)
+**File:** `ui/src/lib/components/TxDspPanel.svelte` (new file)
 
-Document how to use desktop applications with Riglet's remote radios:
+A button co-located with the PTT button area that opens the TX DSP menu.
 
-1. **Virtual serial port** section:
-   - Explain that rigctld's TCP port is directly usable by apps like WSJT-X (Hamlib NET rigctl).
-   - Document `socat` command to create a local virtual serial port mapped to rigctld TCP.
-   - Example for WSJT-X configuration.
-   - Example for fldigi configuration.
+**Props:**
+- `txDspChain: TxDspChain | null`
 
-2. **Virtual audio device** section:
-   - PipeWire: document how to create a virtual sink/source pair and bridge it to Riglet's audio WebSocket.
-   - JACK: similar documentation for JACK-based setups.
-   - Reference a helper script concept (note: actual bridge daemon is future work).
+**UI:**
+- A single button labeled "TX DSP" or a gear icon
+- Badge/indicator showing number of active TX DSP stages (e.g., "3" if 3 stages enabled)
+- Click opens `TxDspMenu` (Task 20) as a slide-up panel or popover
 
-3. **Network considerations**: note that the operator's LAN should have low latency for best experience.
-
-**Done when**: Documentation is clear, includes copy-paste-ready commands, and covers the major use cases.
+**Accessibility:**
+- `<button>` with `aria-expanded` and `aria-haspopup="dialog"`
+- Keyboard accessible
 
 ---
 
-### Task 35: Extended CAT frontend controls (VFO, SWR, CTCSS)
+#### Task 20: TxDspMenu component
 
-**Files**: `ui/src/lib/components/VfoSelector.svelte` (new), `ui/src/lib/components/SwrMeter.svelte` (new), `ui/src/lib/components/CtcssSelector.svelte` (new)
+**File:** `ui/src/lib/components/TxDspMenu.svelte` (new file)
 
-Create UI components for the extended CAT features:
+A menu/panel for configuring all TX DSP stages.
 
-1. `VfoSelector.svelte`: Toggle between VFO A and VFO B. Shows active VFO. Sends `vfo` message via control WebSocket.
-2. `SwrMeter.svelte`: Displays SWR reading as a bar meter (1.0 to 3.0+ range). Color coded: green (<1.5), yellow (1.5-2.5), red (>2.5). Only visible during TX (SWR is meaningless during RX).
-3. `CtcssSelector.svelte`: Dropdown of standard CTCSS tones (67.0 Hz through 254.1 Hz, plus "Off"). Sends `ctcss` message via control WebSocket. Shows current tone setting.
-4. All components: keyboard accessible, ARIA labeled, theme-aware.
-5. Integrate as available layout panels.
+**Props:**
+- `txDspChain: TxDspChain | null`
+- `open: boolean` (bindable)
 
-**Done when**: VFO switching works. SWR meter shows during TX. CTCSS can be set and cleared. `npm run build` passes.
+**Sections (collapsible):**
+1. **Filters**: highpass on/off + freq slider, lowpass on/off + freq slider
+2. **EQ**: on/off toggle, bass/mid/treble gain sliders (-20 to +20 dB)
+3. **Compressor**: on/off toggle, preset pills (light/medium/heavy/manual), when manual: threshold/ratio/attack/release sliders
+4. **Limiter**: on/off toggle, threshold slider (-20 to 0 dB)
+5. **Gate**: on/off toggle, threshold slider (-100 to 0 dB)
 
----
+**Behavior:**
+- Changes apply immediately to `txDspChain`
+- Emit `change` event for persistence (Task 24)
+- Close on click-outside or Escape
 
-### Task 36: ModeSelector curated mode support
-
-**Files**: `ui/src/lib/components/ModeSelector.svelte`, `ui/src/lib/api.ts`
-
-Update ModeSelector to show only supported modes:
-
-1. On mount, call `GET /api/radio/{radioId}/modes` (from task 6) to get the curated mode list.
-2. Render only the modes returned by the API.
-3. If the API call fails, fall back to the current generic mode list.
-4. Cache the mode list per radio (it does not change at runtime).
-5. Keyboard navigable.
-
-**Done when**: ModeSelector shows only modes relevant to the connected radio model. `npm run build` passes.
+**Accessibility:**
+- Focus trap, Escape closes
+- Collapsible sections use `<details>/<summary>` or equivalent with `aria-expanded`
 
 ---
 
-### Task 37: Backend tests -- band plan, presets, config schema
+#### Task 21: Integrate RxDspPillRow into main page layout
 
-**Files**: `server/tests/test_bandplan.py` (new), `server/tests/test_presets.py` (new), `server/tests/test_config_v2.py` (new)
+**File:** `ui/src/routes/+page.svelte`
 
-Write pytest tests for new backend features:
+**Changes:**
+- Import `RxDspPillRow` from `$lib/components/RxDspPillRow.svelte`
+- Place `<RxDspPillRow rxDspChain={audioManager?.getRxDspChain()} />` below the `FrequencyDisplay` component, above the waterfall
+- Pass the `RxDspChain` instance obtained from `AudioManager.getRxDspChain()`
+- Wire `change` events from pill row to the persistence layer (Task 24)
 
-1. `test_bandplan.py`:
-   - `test_us_band_plan_has_expected_bands`: verify US plan includes 160m through 70cm.
-   - `test_eu_band_plan_differs_from_us`: at least one band edge differs.
-   - `test_unknown_region_raises`: `get_bands("xx")` raises ValueError.
-   - `test_band_def_fields`: each BandDef has name, lower_mhz < upper_mhz, default_mode.
-
-2. `test_presets.py`:
-   - `test_create_preset`: POST creates and persists.
-   - `test_update_preset`: PUT modifies existing.
-   - `test_delete_preset`: DELETE removes.
-   - `test_import_export_roundtrip`: import then export returns same data.
-   - `test_preset_invalid_band_rejected`: preset with nonexistent band returns 409.
-
-3. `test_config_v2.py`:
-   - `test_region_field_default`: default config has region "us".
-   - `test_invalid_region_rejected`: unknown region fails validation.
-   - `test_radio_type_simulated`: config with type "simulated" passes validation without audio fields.
-   - `test_radio_bands_validated`: bands not in region plan fail validation.
-   - `test_presets_in_config`: presets round-trip through save/load.
-
-**Done when**: All tests pass with `uv run pytest`. No test uses network or hardware.
+**Acceptance criteria:**
+- Pill row renders on the main page
+- Clicking a pill opens its popover
+- Toggling a filter audibly affects RX audio
 
 ---
 
-### Task 38: Backend tests -- extended CAT, simulation type
+#### Task 22: Integrate TxDspPanel into PTT area
 
-**Files**: `server/tests/test_extended_cat.py` (new), `server/tests/test_simulation.py` (new)
+**File:** `ui/src/routes/+page.svelte`
 
-Write pytest tests for extended CAT and simulation behavior:
+**Changes:**
+- Import `TxDspPanel` from `$lib/components/TxDspPanel.svelte`
+- Place `<TxDspPanel txDspChain={audioManager?.getTxDspChain()} />` adjacent to the `PttButton` component
+- Wire `change` events to persistence layer (Task 24)
 
-1. `test_extended_cat.py`:
-   - `test_get_vfo_simulation`: simulated radio returns "VFOA".
-   - `test_set_vfo_simulation`: set_vfo stores new value.
-   - `test_get_swr_simulation`: returns 1.0.
-   - `test_get_ctcss_simulation`: returns 0.0.
-   - `test_set_ctcss_simulation`: stores tone value.
-
-2. `test_simulation.py`:
-   - `test_simulated_radio_starts_online`: type "simulated" radio has online=True after startup.
-   - `test_real_radio_unreachable_stays_offline`: type "real" radio with no rigctld has online=False, simulation=False.
-   - `test_simulated_radio_returns_mock_data`: poll_once returns data without rigctld.
-   - `test_real_radio_offline_no_mock_data`: poll_once raises or returns empty when offline (not mocked).
-
-**Done when**: All tests pass with `uv run pytest`. Tests properly isolate without requiring rigctld.
+**Acceptance criteria:**
+- TX DSP button renders next to PTT
+- Opening the menu shows all TX DSP controls
+- Toggling a TX DSP stage audibly affects transmitted audio
 
 ---
 
-### Task 39: Frontend build verification
+#### Task 23: Load DSP config from backend on radio connect
 
-**Agent**: @tester
+**Files:**
+- `ui/src/lib/api.ts` -- add `getDspConfig(radioId: string)` and `patchDspConfig(radioId: string, patch: object)` functions
+- `ui/src/routes/+page.svelte` or appropriate connection handler
 
-Run `npm run build` from `ui/` and verify:
-1. Build completes with zero errors.
-2. No TypeScript type errors.
-3. All new modules are included in the build output.
-4. The `build/` directory contains the expected static files.
+**getDspConfig:**
+- `GET /api/radios/{radioId}/dsp`
+- Returns `{ rx: RxDspConfig, tx: TxDspConfig }`
+- TypeScript interfaces matching backend schema
 
-**Done when**: `npm run build` exits 0. Output directory contains index.html and JS bundles.
+**patchDspConfig:**
+- `PATCH /api/radios/{radioId}/dsp`
+- Accepts partial `{ rx?: Partial<RxDspConfig>, tx?: Partial<TxDspConfig> }`
+- Returns updated full config
 
----
+**Load on connect:**
+- After `AudioManager` is initialized and DSP chains are built, call `getDspConfig(radioId)`
+- Apply returned RX config values to `RxDspChain` (call each setter: `enableHighpass`, `setHighpass`, etc.)
+- Apply returned TX config values to `TxDspChain`
+- If GET fails (e.g., network error), log warning and use defaults (all disabled)
 
-### Task 40: Full lint + type check pass
-
-**Agent**: @tester
-
-Run all quality checks and fix any issues:
-
-1. `cd /Users/wells/Projects/riglet/server && uv run ruff check .` -- zero warnings.
-2. `cd /Users/wells/Projects/riglet/server && uv run mypy .` -- zero errors.
-3. `cd /Users/wells/Projects/riglet/server && uv run pytest` -- all tests pass.
-4. `cd /Users/wells/Projects/riglet/ui && npm run build` -- zero errors.
-
-**Done when**: All four commands exit 0 with clean output.
-
----
-
-## Wave 6: Post-Audit Fixes
-
-_Addresses critical and high-severity findings from the v0.2.0 readiness audit (`analysis/v0.2.0_readiness_20260328.md`)._
-
-### Task 42 — Wire VizSwitcher into main page
-
-**Status:** COMPLETE
-**Files:** `ui/src/routes/+page.svelte`
-
-**Work:**
-- Import `VizSwitcher.svelte` in `+page.svelte`
-- Add reactive `vizMode` state variable (default `"waterfall"`)
-- Render `<VizSwitcher bind:mode={vizMode} />` in the toolbar/controls area
-- Pass `mode={vizMode}` to `<VisualizationPanel>` so mode changes take effect immediately
-
-**Acceptance:** User can switch between waterfall, spectrum, oscilloscope, constellation, phase, and spectrogram3d modes from the main page UI.
+**Acceptance criteria:**
+- On page load with a configured radio, DSP settings are restored from backend
+- If backend has no DSP config (defaults), all filters start disabled
 
 ---
 
-### Task 43 — Connect TX visualization
+#### Task 24: Debounced save DSP config to backend on parameter change
 
-**Status:** COMPLETE
-**Files:** `ui/src/routes/+page.svelte`
+**Files:**
+- `ui/src/routes/+page.svelte` or a new `ui/src/lib/dsp-persistence.ts` utility
 
-**Work:**
-- Identify where `AudioManager` exposes TX PCM float data (e.g. an `onTxPcmFloat` callback or similar)
-- In `+page.svelte`, wire that callback to `VisualizationPanel`'s `onTxPcmFloat` prop
-- Ensure wiring is active only when PTT is engaged
+**Implementation:**
+- Create a `DspPersistence` class or utility:
+  - Holds the current radio ID and a 500ms debounce timer
+  - `saveRx(partialConfig: Partial<RxDspConfig>)`: debounced PATCH with `{ rx: partialConfig }`
+  - `saveTx(partialConfig: Partial<TxDspConfig>)`: debounced PATCH with `{ tx: partialConfig }`
+  - On debounce fire: calls `patchDspConfig(radioId, pendingPatch)` from `api.ts`
+  - Merges multiple rapid changes into one PATCH (accumulate partial updates during debounce window)
+- Wire `change` events from `RxDspPillRow`/`RxDspPopover` to `saveRx()`
+- Wire `change` events from `TxDspPanel`/`TxDspMenu` to `saveTx()`
+- On PATCH failure: log error, do not retry (settings are still applied locally, just not persisted)
 
-**Acceptance:** During transmit, the visualization panel receives and renders TX audio data.
-
----
-
-### Task 44 — Update config.yaml.default
-
-**Status:** COMPLETE
-**Files:** `deployment/files/config.yaml.default`
-
-**Work:**
-- Add `region: us` under the `operator:` section
-- Add `presets: []` at the top level
-
-**Acceptance:** The default config file is schema-valid against the current `RigletConfig` Pydantic model.
+**Acceptance criteria:**
+- Changing a filter parameter triggers a PATCH after 500ms of inactivity
+- Rapid successive changes are batched into a single PATCH
+- Reloading the page restores the last-saved settings
 
 ---
 
-### Task 45 — Validate VFO input in cat.py
+#### Task 25: Backend unit tests for RxDspConfig and TxDspConfig schema validation
 
-**Status:** COMPLETE
-**Files:** `server/routers/cat.py`
+**File:** `server/tests/test_dsp_config.py` (new file)
 
-**Work:**
-- Add an allowlist of valid VFO strings: `["VFOA", "VFOB", "Main", "Sub"]`
-- Before passing the VFO value to rigctld, check it against the allowlist (case-insensitive)
-- Return HTTP 422 Unprocessable Entity if the value is not in the allowlist
+**Test cases:**
+- `test_rx_dsp_config_defaults`: `RxDspConfig()` produces all-disabled defaults
+- `test_tx_dsp_config_defaults`: `TxDspConfig()` produces all-disabled defaults
+- `test_rx_dsp_highpass_freq_range`: values below 50 and above 500 raise `ValidationError`
+- `test_rx_dsp_lowpass_freq_range`: values below 1500 and above 5000 raise `ValidationError`
+- `test_rx_dsp_noise_blanker_freq_values`: only 50 and 60 accepted
+- `test_rx_dsp_notch_mode_literal`: only "manual" and "auto" accepted
+- `test_rx_dsp_bandpass_preset_literal`: only "voice", "cw", "manual" accepted
+- `test_rx_dsp_nr_amount_range`: values below 0.0 and above 1.0 raise `ValidationError`
+- `test_tx_dsp_compressor_preset_literal`: only "off", "light", "medium", "heavy", "manual" accepted
+- `test_tx_dsp_gate_threshold_range`: values below -100 and above 0 raise `ValidationError`
+- `test_radio_config_with_dsp_roundtrip`: `RadioConfig` with nested DSP configs serializes and deserializes correctly
+- `test_radio_config_without_dsp_backward_compat`: `RadioConfig` dict without `rx_dsp`/`tx_dsp` keys parses with defaults
 
-**Acceptance:** Sending an arbitrary string as VFO value returns 422; all valid VFO values (`VFOA`, `VFOB`, `Main`, `Sub`) continue to work.
+**Acceptance criteria:**
+- All tests pass with `uv run pytest tests/test_dsp_config.py`
+
+---
+
+#### Task 26: Backend integration tests for DSP config GET/PATCH
+
+**File:** `server/tests/test_dsp_api.py` (new file)
+
+Use `httpx.AsyncClient` with FastAPI `TestClient` pattern (or `pytest-asyncio` + `app` fixture).
+
+**Test cases:**
+- `test_get_dsp_config_defaults`: GET returns all-disabled defaults for a valid radio
+- `test_get_dsp_config_404`: GET with nonexistent radio_id returns 404
+- `test_patch_rx_dsp_partial`: PATCH `{"rx": {"highpass_enabled": true, "highpass_freq": 200}}` updates only those fields, TX unchanged
+- `test_patch_tx_dsp_partial`: PATCH `{"tx": {"compressor_enabled": true, "compressor_preset": "medium"}}` updates only those fields, RX unchanged
+- `test_patch_dsp_invalid_value_409`: PATCH with out-of-range value returns 409 with RFC 7807 body
+- `test_patch_dsp_persists_to_disk`: After PATCH, reload config from disk and verify DSP values present
+- `test_patch_dsp_empty_body_noop`: PATCH `{}` returns current config unchanged
+
+**Acceptance criteria:**
+- All tests pass with `uv run pytest tests/test_dsp_api.py`
 
 ---
 
-### Task 46 — Fix stale OVERVIEW.md documentation
+#### Task 27: Frontend unit tests for RxDspChain node wiring and parameter application
 
-**Status:** COMPLETE
-**Files:** `.state/OVERVIEW.md`
+**File:** `ui/src/lib/audio/rx-dsp-chain.test.ts` (new file)
 
-**Work:**
-- In the File Structure section, replace `image/` with `deployment/`
-- Correct any description that states the spectrum scope is "always-visible" — it is user-toggleable
-- Correct any description that states LUFS metering is "always visible" — it is user-toggleable
+Use Vitest with a mock/stub `AudioContext` (e.g., `standardized-audio-context-mock` or manual mocks).
 
-**Acceptance:** OVERVIEW.md accurately describes the current implementation and directory layout.
+**Test cases:**
+- `test_build_creates_all_nodes`: After `build()`, all node properties are non-null (except NR which may be null if worklet fails)
+- `test_chain_order`: `input` is the highpass node, `output` is the last node (NR or bandpass if NR unavailable)
+- `test_highpass_enable_disable`: enabling sets freq to configured value, disabling sets freq to 1 Hz
+- `test_lowpass_enable_disable`: enabling sets freq to configured value, disabling sets freq to Nyquist
+- `test_bandpass_presets`: setting "voice" preset applies center=1500/width=2400, "cw" applies center=700/width=500
+- `test_notch_enable_disable`: enabling sets Q to configured value, disabling sets Q to 0.01
+- `test_noise_blanker_freq_switch`: setting 60 Hz changes notch frequency to 60
+- `test_nr_amount_clamped`: values outside 0-1 are clamped
+- `test_destroy_disconnects_all`: after `destroy()`, all node refs are null
+
+**Acceptance criteria:**
+- All tests pass with `npm test` (Vitest)
 
 ---
+
+#### Task 28: Frontend unit tests for TxDspChain node wiring and parameter application
+
+**File:** `ui/src/lib/audio/tx-dsp-chain.test.ts` (new file)
+
+Use Vitest with mock AudioContext.
+
+**Test cases:**
+- `test_build_creates_all_nodes`: After `build()`, all node properties are non-null
+- `test_chain_order`: `input` is highpass, `output` is gateNode
+- `test_highpass_enable_disable`: enabling/disabling toggles cutoff
+- `test_lowpass_enable_disable`: enabling/disabling toggles cutoff
+- `test_eq_enable_disable`: enabling preserves gain values, disabling zeros all gains
+- `test_compressor_presets`: each preset applies correct threshold/ratio/attack/release values
+- `test_compressor_manual_override`: setting manual params changes preset to "manual"
+- `test_limiter_enable_disable`: enabling applies threshold, disabling sets ratio=1/threshold=0
+- `test_gate_enable_disable`: enabling allows gate to close (gain=0), disabling forces gain=1
+- `test_destroy_cleans_up`: after `destroy()`, all node refs are null and interval/RAF cleared
+
+**Acceptance criteria:**
+- All tests pass with `npm test` (Vitest)
