@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import LufsMeter from '$lib/components/LufsMeter.svelte';
+	import VizSwitcher from '$lib/components/VizSwitcher.svelte';
 	import type { VisualizationMode } from '$lib/viz/types.js';
 	import type { Renderer, RendererContext, VisualizationData } from '$lib/viz/types.js';
 	import { createRenderer } from '$lib/viz/base-renderer.js';
@@ -54,7 +55,7 @@
 	let wfSpeed = $state(loadNum(WF_SPEED_KEY, 1));   // frames to skip per row
 	let wfFloor = $state(loadNum(WF_FLOOR_KEY, -100)); // dB floor
 	let wfCeil  = $state(loadNum(WF_CEIL_KEY, 0));     // dB ceiling
-	let wfOpen  = $state(false);                        // controls popup open
+	let configOpen = $state(false);                     // controls popup open
 
 	// Sync waterfall renderer whenever controls change
 	$effect(() => {
@@ -69,6 +70,29 @@
 			localStorage.setItem(WF_SPEED_KEY, String(speed));
 			localStorage.setItem(WF_FLOOR_KEY, String(floor));
 			localStorage.setItem(WF_CEIL_KEY, String(ceil));
+		} catch { /* ignore */ }
+	});
+
+	// ---------------------------------------------------------------------------
+	// Oscilloscope controls (time window, gain)
+	// ---------------------------------------------------------------------------
+	const OSC_SAMPLES_KEY = 'riglet:oscSamples';
+	const OSC_GAIN_KEY    = 'riglet:oscGain';
+
+	let oscSamples = $state(loadNum(OSC_SAMPLES_KEY, 512));
+	let oscGain    = $state(loadNum(OSC_GAIN_KEY, 1));
+	// oscOpen removed — unified into configOpen
+
+	$effect(() => {
+		const samples = oscSamples;
+		const gain    = oscGain;
+		if (renderer && 'setTimeScale' in renderer) {
+			(renderer as OscilloscopeRenderer).setTimeScale(samples);
+			(renderer as OscilloscopeRenderer).setGain(gain);
+		}
+		try {
+			localStorage.setItem(OSC_SAMPLES_KEY, String(samples));
+			localStorage.setItem(OSC_GAIN_KEY, String(gain));
 		} catch { /* ignore */ }
 	});
 
@@ -198,6 +222,11 @@
 				(renderer as WaterfallRenderer).setSpeed(wfSpeed);
 				(renderer as WaterfallRenderer).setRange(wfFloor, wfCeil);
 			}
+			// Apply oscilloscope controls to freshly-created renderer
+			if ('setTimeScale' in renderer) {
+				(renderer as OscilloscopeRenderer).setTimeScale(oscSamples);
+				(renderer as OscilloscopeRenderer).setGain(oscGain);
+			}
 		} catch (e) {
 			console.warn('[VisualizationPanel] Failed to create renderer:', e);
 		}
@@ -223,10 +252,12 @@
 	}
 
 	// React to viz mode changes
+	const CONFIGURABLE_MODES = new Set<VisualizationMode>(['waterfall', 'spectrogram3d', 'oscilloscope']);
+
 	$effect(() => {
 		const m = mode;
 		if (renderer || rendererContext) mountRenderer(m);
-		if (m !== 'waterfall' && m !== 'spectrogram3d') wfOpen = false;
+		if (!CONFIGURABLE_MODES.has(m)) configOpen = false;
 	});
 
 	// Forward external PCM to main renderer
@@ -313,6 +344,20 @@
 	});
 </script>
 
+<div class="viz-container">
+<div class="viz-switcher-bar">
+	<VizSwitcher bind:mode />
+	{#if CONFIGURABLE_MODES.has(mode)}
+		<button
+			class="config-btn"
+			class:config-btn-open={configOpen}
+			onclick={() => configOpen = !configOpen}
+			title="Visualizer settings"
+			aria-label="Visualizer settings"
+		>⚙</button>
+	{/if}
+</div>
+
 <div class="viz-outer" role="img" aria-label="Visualization panel">
 	{#if lufsPosition === 'left'}
 		<div class="lufs-col lufs-left">
@@ -340,18 +385,10 @@
 		<!-- Main visualization canvas -->
 		<canvas bind:this={canvas} class="viz-canvas"></canvas>
 
-		<!-- Waterfall / 3D spectrogram controls popup -->
-		{#if mode === 'waterfall' || mode === 'spectrogram3d'}
-		<div class="wf-popup-wrap">
-			<button
-				class="wf-toggle"
-				class:wf-toggle-open={wfOpen}
-				onclick={() => wfOpen = !wfOpen}
-				title="Waterfall settings"
-				aria-label="Waterfall settings"
-			>⚙</button>
-			{#if wfOpen}
-			<div class="wf-controls">
+		<!-- Visualizer config popup (unified) -->
+		{#if configOpen && CONFIGURABLE_MODES.has(mode)}
+		<div class="wf-controls viz-config-popup">
+			{#if mode === 'waterfall' || mode === 'spectrogram3d'}
 				<div class="wf-controls-title">Waterfall</div>
 				<label class="wf-label">
 					<span>Speed</span>
@@ -368,7 +405,18 @@
 					<input type="range" min="-80" max="0" step="5" bind:value={wfCeil} />
 					<span class="wf-val">{wfCeil} dB</span>
 				</label>
-			</div>
+			{:else if mode === 'oscilloscope'}
+				<div class="wf-controls-title">Oscilloscope</div>
+				<label class="wf-label">
+					<span>Time</span>
+					<input type="range" min="128" max="2048" step="128" bind:value={oscSamples} />
+					<span class="wf-val">{Math.round(oscSamples / sampleRate * 1000)}ms</span>
+				</label>
+				<label class="wf-label">
+					<span>Gain</span>
+					<input type="range" min="0.5" max="8" step="0.5" bind:value={oscGain} />
+					<span class="wf-val">{oscGain}×</span>
+				</label>
 			{/if}
 		</div>
 		{/if}
@@ -380,9 +428,44 @@
 			<LufsMeter {pcmSamples} fillHeight />
 		</div>
 	{/if}
-</div>
+</div><!-- /.viz-outer -->
+</div><!-- /.viz-container -->
 
 <style>
+	.viz-container {
+		flex: 1;
+		min-height: 0;
+		display: flex;
+		flex-direction: column;
+		overflow: hidden;
+	}
+
+	.viz-switcher-bar {
+		flex-shrink: 0;
+		display: flex;
+		align-items: center;
+		background: #111;
+		border: 1px solid #333;
+		border-bottom: none;
+		border-radius: 4px 4px 0 0;
+		padding: 2px 4px;
+	}
+
+	.config-btn {
+		margin-left: auto;
+		background: none;
+		border: 1px solid transparent;
+		border-radius: 3px;
+		color: #555;
+		font-size: 0.8rem;
+		line-height: 1;
+		padding: 3px 6px;
+		cursor: pointer;
+	}
+	.config-btn:hover { color: #ccc; border-color: #555; }
+	.config-btn:focus-visible { outline: 1px solid #4a9eff; outline-offset: 2px; }
+	.config-btn-open { color: #4a9eff; border-color: #4a9eff; }
+
 	.viz-outer {
 		flex: 1;
 		min-height: 0;
@@ -390,7 +473,7 @@
 		flex-direction: row;
 		overflow: hidden;
 		border: 1px solid #333;
-		border-radius: 4px;
+		border-radius: 0 0 4px 4px;
 		background: #000;
 	}
 
@@ -412,31 +495,13 @@
 		image-rendering: pixelated;
 	}
 
-	/* ---- waterfall controls popup ---- */
-	.wf-popup-wrap {
+	/* ---- visualizer config popup ---- */
+	.viz-config-popup {
 		position: absolute;
-		bottom: 32px; /* sit above the frequency axis (AXIS_HEIGHT = 28px) */
+		top: 4px;
 		right: 4px;
-		display: flex;
-		flex-direction: column-reverse;
-		align-items: flex-end;
-		gap: 2px;
 		z-index: 10;
 	}
-
-	.wf-toggle {
-		background: rgba(0, 0, 0, 0.6);
-		border: 1px solid #444;
-		border-radius: 3px;
-		color: #666;
-		font-size: 0.75rem;
-		line-height: 1;
-		padding: 3px 5px;
-		cursor: pointer;
-	}
-	.wf-toggle:hover { color: #ccc; border-color: #777; }
-	.wf-toggle:focus-visible { outline: 1px solid #4a9eff; outline-offset: 2px; }
-	.wf-toggle-open { color: #4a9eff; border-color: #4a9eff; }
 
 	.wf-controls {
 		display: flex;
