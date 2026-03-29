@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onMount, onDestroy } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { getStatus, getConfig, getRadioCat, getPresets, postAudioVolume } from '$lib/api.js';
 	import { radioState, appConfig } from '$lib/stores.js';
@@ -24,9 +24,10 @@
 	import LayoutManager from '$lib/components/LayoutManager.svelte';
 	import type { VisualizationMode } from '$lib/viz/types.js';
 	import type { RadioState, PresetConfig } from '$lib/types.js';
+	import type { DspChain } from '$lib/audio/dsp-chain.js';
 
-	let radioId = $state<string | null>(null);
-	let state = $state<RadioState>({
+	let radioId: string | null = $state(null);
+	let radio: RadioState = $state({
 		id: '',
 		name: '',
 		freq: 14.2,
@@ -53,17 +54,17 @@
 		}, 300);
 	}
 
-	let controlWs = $state<ControlWebSocket | null>(null);
+	let controlWs: ControlWebSocket | null = $state(null);
 	let audioWs: AudioWebSocket | null = null;
-	let audioMgr = $state<AudioManager | null>(null);
-	let dspChain = $state<import('$lib/audio/dsp-chain.js').DspChain | null>(null);
+	let audioMgr: AudioManager | null = $state(null);
+	let dspChain: DspChain | null = $state(null);
 
 	// Presets
-	let presets = $state<PresetConfig[]>([]);
+	let presets: PresetConfig[] = $state([]);
 
 	// Region and enabled bands from config
 	let region = $state('us');
-	let enabledBands = $state<string[]>([]);
+	let enabledBands: string[] = $state([]);
 
 	// Visualization mode — persisted in localStorage
 	const VIZ_MODES: VisualizationMode[] = ['waterfall', 'spectrum', 'oscilloscope', 'constellation', 'phase', 'spectrogram3d'];
@@ -75,36 +76,39 @@
 		} catch { /* ignore */ }
 		return 'waterfall';
 	}
-	let vizMode = $state<VisualizationMode>(loadVizMode());
+	let vizMode: VisualizationMode = $state(loadVizMode());
 	$effect(() => {
 		try { localStorage.setItem(VIZ_STORAGE_KEY, vizMode); } catch { /* ignore */ }
 	});
 
 	// Latest PCM samples for LUFS metering (fed from audio manager)
-	let latestPcm = $state<Float32Array | null>(null);
+	let latestPcm: Float32Array | null = $state(null);
 	// TX PCM samples (float32) for visualization during transmit
-	let txPcm = $state<Float32Array | null>(null);
+	let txPcm: Float32Array | null = $state(null);
 	// FFT bins from client-side mic FFT (simulation mode only)
-	let simFftBins = $state<Float32Array | null>(null);
+	let simFftBins: Float32Array | null = $state(null);
 
 	// Active layout from store
-	let layout = $state<LayoutConfig>($activeLayout);
+	let layout: LayoutConfig = $state($activeLayout);
 	$effect(() => {
 		layout = $activeLayout;
 	});
 
 	function handleControlMessage(msg: object) {
 		const m = msg as Record<string, unknown>;
-		if (m.freq !== undefined) state = { ...state, freq: m.freq as number };
-		if (m.mode !== undefined) state = { ...state, mode: m.mode as string };
-		if (m.ptt !== undefined) state = { ...state, ptt: m.ptt as boolean };
-		if (m.online !== undefined) state = { ...state, online: m.online as boolean };
-		if (m.smeter !== undefined) state = { ...state, smeter: m.smeter as number };
-		if (m.vfo !== undefined) state = { ...state, vfo: m.vfo as string };
-		if (m.swr !== undefined) state = { ...state, swr: m.swr as number };
-		if (m.ctcss_tone !== undefined) state = { ...state, ctcss_tone: m.ctcss_tone as number };
-		radioState.set(state);
+		if (m.freq !== undefined) radio = { ...radio, freq: m.freq as number };
+		if (m.mode !== undefined) radio = { ...radio, mode: m.mode as string };
+		if (m.ptt !== undefined) radio = { ...radio, ptt: m.ptt as boolean };
+		if (m.online !== undefined) radio = { ...radio, online: m.online as boolean };
+		if (m.smeter !== undefined) radio = { ...radio, smeter: m.smeter as number };
+		if (m.vfo !== undefined) radio = { ...radio, vfo: m.vfo as string };
+		if (m.swr !== undefined) radio = { ...radio, swr: m.swr as number };
+		if (m.ctcss_tone !== undefined) radio = { ...radio, ctcss_tone: m.ctcss_tone as number };
+		radioState.set(radio);
 	}
+
+	let mountCleanup: (() => void) | undefined;
+	onDestroy(() => mountCleanup?.());
 
 	onMount(async () => {
 		// Check setup_required
@@ -122,8 +126,8 @@
 				return;
 			}
 			radioId = firstRadio.id;
-			state = { ...state, ...firstRadio };
-			radioState.set(state);
+			radio = { ...radio, ...firstRadio };
+			radioState.set(radio);
 		} catch {
 			// Backend unreachable — stay on page, WS will show offline
 		}
@@ -153,8 +157,8 @@
 		// Fetch initial CAT state
 		try {
 			const cat = await getRadioCat(radioId);
-			state = { ...state, ...cat };
-			radioState.set(state);
+			radio = { ...radio, ...cat };
+			radioState.set(radio);
 		} catch {
 			// ignore — control WS will push state on connect
 		}
@@ -169,16 +173,17 @@
 		await audioMgr.startRx();
 		dspChain = audioMgr.getDspChain();
 
-		if (state.simulation) {
+		if (radio.simulation) {
 			// Simulated radio: mic is the audio source (RX path)
 			audioMgr.onRxPcmFloat = (f32: Float32Array) => { latestPcm = f32; };
 			audioMgr.onSimFftBins = (bins: Float32Array) => { simFftBins = bins; };
 			await audioMgr.startMicAsRx();
 
-			return () => {
+			mountCleanup = () => {
 				cws.disconnect();
 				audioMgr?.stopRx(); // also calls stopMicAsRx internally
 			};
+			return;
 		}
 
 		// Real radio: server audio via WebSocket
@@ -208,7 +213,7 @@
 		// Start TX capture (mic) alongside RX — PTT gating happens in worklet
 		await audioMgr.startTx();
 
-		return () => {
+		mountCleanup = () => {
 			cws.disconnect();
 			aws.disconnect();
 			audioMgr?.stopTx();
@@ -234,7 +239,7 @@
 </script>
 
 <svelte:head>
-	<title>Riglet — {state.name || 'Radio'}</title>
+	<title>Riglet — {radio.name || 'Radio'}</title>
 </svelte:head>
 
 <!-- Skip to content link for keyboard users -->
@@ -243,18 +248,18 @@
 <div class="app">
 	<header class="topbar">
 		<span class="brand">Riglet</span>
-		{#if state.name}
-			<span class="radio-name">{state.name}</span>
+		{#if radio.name}
+			<span class="radio-name">{radio.name}</span>
 		{/if}
 		<span
 			class="status-pill"
-			class:online={state.online}
-			class:offline={!state.online}
+			class:online={radio.online}
+			class:offline={!radio.online}
 			role="status"
 			aria-live="polite"
-			aria-label={`Radio ${state.online ? (state.simulation ? 'simulation mode' : 'online') : 'offline'}`}
+			aria-label={`Radio ${radio.online ? (radio.simulation ? 'simulation mode' : 'online') : 'offline'}`}
 		>
-			{state.online ? (state.simulation ? 'SIM' : 'ONLINE') : 'OFFLINE'}
+			{radio.online ? (radio.simulation ? 'SIM' : 'ONLINE') : 'OFFLINE'}
 		</span>
 		<LayoutManager />
 		<a href="/setup" class="setup-btn" title="Open setup wizard" aria-label="Setup / configuration">⚙</a>
@@ -266,26 +271,26 @@
 				<!-- Narrow / single-column fallback -->
 				<div class="narrow-layout">
 					<div class="control-block">
-						<ModeSelector mode={state.mode} {controlWs} {radioId} />
+						<ModeSelector mode={radio.mode} {controlWs} {radioId} />
 					</div>
 					<div class="control-block freq-knob-row">
 						<AudioControls {radioId} {rxVolume} {txGain} audioManager={audioMgr} />
-						<FrequencyDisplay freq={state.freq} {controlWs} {presets} />
-						<TuningKnob freq={state.freq} {controlWs} />
+						<FrequencyDisplay freq={radio.freq} {controlWs} {presets} />
+						<TuningKnob freq={radio.freq} {controlWs} />
 					</div>
 					<div class="control-block">
-						<BandSelector {controlWs} currentFreq={state.freq} {region} {enabledBands} />
+						<BandSelector {controlWs} currentFreq={radio.freq} {region} {enabledBands} />
 					</div>
 					<div class="control-block">
-						<PresetSelector {radioId} currentFreqMhz={state.freq} {controlWs} onPresetsChange={(p) => { presets = p; }} />
+						<PresetSelector {radioId} currentFreqMhz={radio.freq} {controlWs} onPresetsChange={(p) => { presets = p; }} />
 					</div>
-					<VisualizationPanel bind:mode={vizMode} {radioId} cursorMhz={state.freq} radioMode={state.mode} pcmSamples={state.ptt ? txPcm : latestPcm} fftBins={simFftBins} />
+					<VisualizationPanel bind:mode={vizMode} {radioId} cursorMhz={radio.freq} radioMode={radio.mode} pcmSamples={radio.ptt ? txPcm : latestPcm} fftBins={simFftBins} />
 					<div class="control-block ptt-row">
-						<PttButton ptt={state.ptt} {controlWs} />
+						<PttButton ptt={radio.ptt} {controlWs} />
 						<Knob value={txGain} min={0} max={100} step={5} label="Mic Gain" size={72} onchange={onTxGainChange} />
 					</div>
 					<div class="control-block">
-						<SmeterDisplay smeter={state.smeter ?? 0} />
+						<SmeterDisplay smeter={radio.smeter ?? 0} />
 					</div>
 					<div class="control-block">
 						<DspPanel dspChain={dspChain} />
@@ -306,29 +311,29 @@
 							class:viz-panel={panel.component === 'visualization'}
 						>
 							{#if panel.component === 'visualization'}
-								<VisualizationPanel bind:mode={vizMode} {radioId} cursorMhz={state.freq} radioMode={state.mode} pcmSamples={state.ptt ? txPcm : latestPcm} fftBins={simFftBins} />
+								<VisualizationPanel bind:mode={vizMode} {radioId} cursorMhz={radio.freq} radioMode={radio.mode} pcmSamples={radio.ptt ? txPcm : latestPcm} fftBins={simFftBins} />
 							{:else if panel.component === 'frequency'}
 								<div class="inner-block freq-knob-row">
 									<AudioControls {radioId} {rxVolume} {txGain} audioManager={audioMgr} />
-									<FrequencyDisplay freq={state.freq} {controlWs} {presets} />
-									<TuningKnob freq={state.freq} {controlWs} />
+									<FrequencyDisplay freq={radio.freq} {controlWs} {presets} />
+									<TuningKnob freq={radio.freq} {controlWs} />
 								</div>
 							{:else if panel.component === 'band-selector'}
 								<div class="inner-block">
-									<BandSelector {controlWs} currentFreq={state.freq} {region} {enabledBands} />
+									<BandSelector {controlWs} currentFreq={radio.freq} {region} {enabledBands} />
 								</div>
 							{:else if panel.component === 'mode-selector'}
 								<div class="inner-block">
-									<ModeSelector mode={state.mode} {controlWs} {radioId} />
+									<ModeSelector mode={radio.mode} {controlWs} {radioId} />
 								</div>
 							{:else if panel.component === 'ptt'}
 								<div class="inner-block ptt-row">
-									<PttButton ptt={state.ptt} {controlWs} />
+									<PttButton ptt={radio.ptt} {controlWs} />
 									<Knob value={txGain} min={0} max={100} step={5} label="Mic Gain" size={72} onchange={onTxGainChange} />
 								</div>
 							{:else if panel.component === 'smeter'}
 								<div class="inner-block">
-									<SmeterDisplay smeter={state.smeter ?? 0} />
+									<SmeterDisplay smeter={radio.smeter ?? 0} />
 								</div>
 							{:else if panel.component === 'audio'}
 								<div class="inner-block">
@@ -344,19 +349,19 @@
 								</div>
 							{:else if panel.component === 'presets'}
 								<div class="inner-block">
-									<PresetSelector {radioId} currentFreqMhz={state.freq} {controlWs} onPresetsChange={(p) => { presets = p; }} />
+									<PresetSelector {radioId} currentFreqMhz={radio.freq} {controlWs} onPresetsChange={(p) => { presets = p; }} />
 								</div>
 							{:else if panel.component === 'vfo'}
 								<div class="inner-block">
-									<VfoSelector vfo={state.vfo ?? 'VFOA'} {controlWs} />
+									<VfoSelector vfo={radio.vfo ?? 'VFOA'} {controlWs} />
 								</div>
 							{:else if panel.component === 'cat-extended'}
 								<div class="inner-block">
 									<CatExtended
-										vfo={state.vfo ?? 'VFOA'}
-										swr={state.swr ?? 1.0}
-										ctcssTone={state.ctcss_tone ?? 0}
-										ptt={state.ptt}
+										vfo={radio.vfo ?? 'VFOA'}
+										swr={radio.swr ?? 1.0}
+										ctcssTone={radio.ctcss_tone ?? 0}
+										ptt={radio.ptt}
 										{controlWs}
 									/>
 								</div>

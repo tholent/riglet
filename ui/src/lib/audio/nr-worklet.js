@@ -1,3 +1,4 @@
+// @ts-nocheck — runs in AudioWorkletGlobalScope; DOM types are not applicable here.
 /**
  * NR (Noise Reduction) AudioWorkletProcessor.
  *

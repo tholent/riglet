@@ -1,3 +1,4 @@
+// @ts-nocheck — runs in AudioWorkletGlobalScope; DOM types are not applicable here.
 /**
  * PCM AudioWorklet processor for Riglet.
  *

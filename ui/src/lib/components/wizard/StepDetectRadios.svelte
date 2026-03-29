@@ -27,6 +27,7 @@
 					const newRadios = devs.map((d, i): RadioConfig => ({
 						id: `radio${i + 1}`,
 						name: d.description || `Radio ${i + 1}`,
+						type: 'real',
 						hamlib_model: d.guessed_model ?? 1,
 						serial_port: d.port,
 						baud_rate: 19200,
