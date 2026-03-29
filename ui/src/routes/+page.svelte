@@ -669,12 +669,6 @@
 		flex-direction: column;
 	}
 
-	.ptt-row {
-		display: flex;
-		align-items: center;
-		gap: 16px;
-	}
-
 	.freq-knob-row {
 		display: flex;
 		align-items: center;

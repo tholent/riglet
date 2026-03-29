@@ -243,6 +243,7 @@
 		class="popover"
 		role="dialog"
 		aria-modal="true"
+		tabindex="-1"
 		style={posStyle}
 		bind:this={popoverEl}
 		onkeydown={onPopoverKeydown}
@@ -482,36 +483,6 @@
 		outline-offset: 2px;
 	}
 
-	/* ── Pill buttons (popovers only — preset pills) ── */
-	.pill {
-		padding: 3px 8px;
-		border-radius: 4px;
-		border: 1px solid #3a3a3a;
-		background: #252525;
-		color: #999;
-		font-size: 0.72rem;
-		font-weight: 600;
-		letter-spacing: 0.04em;
-		cursor: pointer;
-		white-space: nowrap;
-		transition: background 0.1s, border-color 0.1s, color 0.1s;
-	}
-
-	.pill:hover:not(:disabled):not(.active) {
-		border-color: #555;
-		background: #2e2e2e;
-		color: #ccc;
-	}
-
-	.pill.active {
-		background: #0284c7;
-		border-color: #0ea5e9;
-		color: #fff;
-	}
-
-	.pill:disabled { opacity: 0.35; cursor: not-allowed; }
-	.pill:focus-visible { outline: 2px solid #4a9eff; outline-offset: 2px; }
-
 	.val {
 		font-size: 0.68rem;
 		font-family: 'Courier New', monospace;
@@ -614,6 +585,6 @@
 	}
 
 	@media (prefers-reduced-motion: reduce) {
-		.pill, .preset-pill { transition: none; }
+		.preset-pill { transition: none; }
 	}
 </style>
