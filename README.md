@@ -16,7 +16,8 @@ A self-hosted web application for browser-based control of amateur radios over a
 - **Signal visualization** — six pluggable modes: waterfall, spectrogram (3D), oscilloscope, spectrum, constellation, phase
 - **Frequency presets** — save, recall, import/export; grouped by band
 - **S-meter display** — real-time signal strength from the polling loop
-- **Setup wizard** — guided first-run configuration for radio detection, audio mapping, and PTT method
+- **Password-protected access** — session-cookie auth (bcrypt + itsdangerous); login page, 30-day session, logout; first-run password setup in wizard
+- **Setup wizard** — guided first-run configuration for radio detection, audio mapping, PTT method, and password setup
 - **Simulation mode** — full UI works without hardware; simulated radios return mocked data
 
 ## Project Structure
@@ -27,17 +28,18 @@ riglet/
     config.py          # Configuration models and I/O (Pydantic v2)
     state.py           # RadioInstance, RadioManager, polling loop
     main.py            # FastAPI app, lifespan, routing
+    auth.py            # SessionAuthMiddleware, bcrypt hashing, session token I/O
     devices.py         # Serial and audio device discovery
     bandplan.py        # Amateur band definitions
     modes.py           # Radio mode constants
     deps.py            # Shared FastAPI dependency functions
-    routers/           # API endpoint modules (cat, audio, waterfall, devices, system)
+    routers/           # API endpoint modules (auth, cat, audio, waterfall, devices, system)
     tests/             # pytest test suite
     pyproject.toml     # Dependencies and tool configuration (uv)
 
   ui/                  # Frontend (SvelteKit SPA, Svelte 5)
     src/
-      routes/          # +page.svelte (main UI), setup/+page.svelte (wizard)
+      routes/          # +page.svelte (main UI), setup/ (wizard), login/ (auth gate)
       lib/
         components/    # UI components (FrequencyDisplay, Knob, TuningKnob, VisualizationPanel, …)
         audio/         # AudioManager, DspChain, audio worklet processors

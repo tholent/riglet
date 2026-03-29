@@ -43,7 +43,9 @@ Browser-based ham radio control over LAN. Runs on a Raspberry Pi 4 co-located wi
 - **`deps.py`** — Shared FastAPI dependency functions (`get_manager`, `get_radio`, `RadioDep`) extracted to break circular imports between `main.py` and routers.
 - **`main.py`** — FastAPI app with lifespan context manager. Startup: loads config (defaults to `default_config()` if file missing), creates `RadioManager`, starts it (connects radios, begins polling). Shutdown: stops manager and closes all radios. Dependency functions: `get_manager()` returns the app-state manager; `get_radio(radio_id)` resolves a radio by ID (404 on not found). RFC 7807 exception handler for Pydantic `ValidationError` returns 409 Conflict. Mounts static files (if `/opt/riglet/app/static` exists) and routers at `/api` prefix. Uvicorn entry point.
 - **`routers/system.py`** — `/api/status`, `/api/config` (GET/POST), `/api/config/restart`. `write_env_files()` generates radio-specific environment files for rigctld units. `restart_services()` reloads systemd and restarts rigctld instances and the main service.
-- **`routers/`** — One module per resource: `devices` (serial/audio enumeration, SSE hotplug), `cat` (freq/mode/PTT), `audio` (WebSocket PCM), `waterfall` (WebSocket FFT frames).
+- **`auth.py`** — `SessionAuthMiddleware` (deny-by-default on all `/api/` routes), `hash_password`/`verify_password` (bcrypt), `create_session_token`/`verify_session_token` (itsdangerous). Secrets stored in `~/.config/riglet/secrets.yaml` (mode 0600); `RIGLET_SECRETS` env var overrides path. No secrets file = unauthenticated/setup mode.
+- **`routers/auth.py`** — `POST /api/auth/login`, `POST /api/auth/logout`, `GET /api/auth/status`, `POST /api/auth/set-password`.
+- **`routers/`** — One module per resource: `auth` (session auth), `devices` (serial/audio enumeration, SSE hotplug), `cat` (freq/mode/PTT), `audio` (WebSocket PCM), `waterfall` (WebSocket FFT frames).
 - **`devices.py`** — Serial and audio device discovery; SSE stream for udev hotplug events.
 
 ### Key design decisions
@@ -58,15 +60,16 @@ Browser-based ham radio control over LAN. Runs on a Raspberry Pi 4 co-located wi
 
 ### Frontend structure (`ui/src/`)
 
-- **`routes/+page.svelte`** — Main UI page. Redirects to `/setup` if `setup_required` flag is set in status. On load, mounts all three WebSocket channels (control, audio, waterfall).
-- **`routes/setup/+page.svelte`** — Five-step wizard: hostname configuration, serial radio detection, audio device mapping, PTT method selection, review and apply.
+- **`routes/+page.svelte`** — Main UI page. Checks auth status on load; redirects to `/login` if unauthenticated, to `/setup` if `setup_required`. Mounts all three WebSocket channels (control, audio, waterfall). Includes logout button.
+- **`routes/login/+page.svelte`** — Password login page. Calls `POST /api/auth/login`; on success navigates to `/`.
+- **`routes/setup/+page.svelte`** — Six-step wizard: hostname configuration, serial radio detection, audio device mapping, PTT method selection, set password, review and apply.
 - **`lib/api.ts`** — Typed REST client for all backend endpoints (config, status, device discovery, CAT commands, logs, Hamlib models).
 - **`lib/websocket.ts`** — `ControlWebSocket` class for control channel with exponential backoff reconnect logic.
 - **`lib/reconnect.ts`** — `waitForRestart()` utility that polls `/api/status` every 1 second with a 30-second timeout after a service restart.
 - **`lib/audio/`** — `AudioManager.ts` (Web Audio API, getUserMedia stream capture and playback) and `pcm-worklet-processor.js` (s16le to Float32 bidirectional ring buffer in an AudioWorklet).
 - **`lib/components/`** — UI components: `Waterfall` (scrolling canvas with frequency axis along the bottom; ResizeObserver drives dynamic height), `FrequencyDisplay` (large `XX.XXX.XXX MHz` monospace format with ±1 kHz nudge buttons), `BandSelector` (160m–6m band pills, highlights active band), `ModeSelector`, `PttButton`, `SmeterDisplay`, `AudioControls`. The radio header (mode / frequency / band) is stacked vertically inside the waterfall column so both columns align to the top.
-- **`lib/components/wizard/`** — Setup wizard steps: `StepWelcome`, `StepDetectRadios`, `StepMapAudio`, `StepPttMethod`, `StepReviewApply`.
+- **`lib/components/wizard/`** — Setup wizard steps: `StepWelcome`, `StepDetectRadios`, `StepMapAudio`, `StepPttMethod`, `StepSetPassword`, `StepReviewApply`.
 
-### Image build (`image/`)
+### Image build (`deployment/`)
 
 rpi-image-gen profile for Raspberry Pi 4 Bookworm 64-bit. Contains `config.ini` (profile metadata), `packages.txt` (apt dependencies), and `scripts/01-configure.sh` (idempotent post-install: creates user, sets up Python venv, installs systemd units, hardens SSH).
