@@ -91,6 +91,31 @@
 		rx.setNrAmount(cfg.nr_amount);
 	}
 
+	function applyTxDspConfig(tx: TxDspChain, cfg: TxDspConfig): void {
+		tx.enableHighpass(cfg.highpass_enabled);
+		tx.setHighpass(cfg.highpass_freq);
+		tx.enableLowpass(cfg.lowpass_enabled);
+		tx.setLowpass(cfg.lowpass_freq);
+		tx.enableEq(cfg.eq_enabled);
+		tx.setBass(cfg.eq_bass_gain);
+		tx.setMid(cfg.eq_mid_gain);
+		tx.setTreble(cfg.eq_treble_gain);
+		tx.enableCompressor(cfg.compressor_enabled);
+		if (cfg.compressor_preset !== 'off') {
+			tx.setCompressorPreset(cfg.compressor_preset);
+		}
+		tx.setCompressor(
+			cfg.compressor_threshold,
+			cfg.compressor_ratio,
+			cfg.compressor_attack,
+			cfg.compressor_release,
+		);
+		tx.enableLimiter(cfg.limiter_enabled);
+		tx.setLimiterThreshold(cfg.limiter_threshold);
+		tx.enableGate(cfg.gate_enabled);
+		tx.setGateThreshold(cfg.gate_threshold);
+	}
+
 	function handleTxDspChange(detail: { param: string; value: unknown }): void {
 		if (detail.param === 'mic_mute') {
 			audioMgr?.setMicMute(detail.value as boolean);
@@ -248,20 +273,22 @@
 			audioMgr.onSimFftBins = (bins: Float32Array) => { simFftBins = bins; };
 			await audioMgr.startMicAsRx();
 
-			// Load DSP config for RX chain in simulation mode
+			// Start TX DSP chain so controls are available even in simulation
+			await audioMgr.startTx();
+			txDspChain = audioMgr.getTxDspChain();
+
+			// Load DSP config for both chains in simulation mode
 			try {
 				const dspCfg = await getDspConfig(radioId);
 				const rx = rxDspChain;
 				if (rx) applyRxDspConfig(rx, dspCfg.rx);
+				const tx = txDspChain;
+				if (tx) applyTxDspConfig(tx, dspCfg.tx);
 			} catch (e) {
 				console.warn('[DSP] Failed to load DSP config from backend, using defaults:', e);
 			}
 
 			dspPersistence = new DspPersistence(radioId);
-
-			// Start TX DSP chain so controls are available even in simulation
-			await audioMgr.startTx();
-			txDspChain = audioMgr.getTxDspChain();
 
 			mountCleanup = () => {
 				cws.disconnect();
@@ -303,50 +330,8 @@
 		// Load DSP config from backend and apply to both chains
 		try {
 			const dspCfg = await getDspConfig(radioId);
-			const rx = rxDspChain;
-			if (rx) {
-				rx.enableHighpass(dspCfg.rx.highpass_enabled);
-				rx.setHighpass(dspCfg.rx.highpass_freq);
-				rx.enableLowpass(dspCfg.rx.lowpass_enabled);
-				rx.setLowpass(dspCfg.rx.lowpass_freq);
-				rx.enablePeak(dspCfg.rx.peak_enabled);
-				rx.setPeak(dspCfg.rx.peak_freq, dspCfg.rx.peak_gain, dspCfg.rx.peak_q);
-				rx.enableNoiseBlanker(dspCfg.rx.noise_blanker_enabled);
-				rx.setNoiseBlankerFreq(dspCfg.rx.noise_blanker_freq as 50 | 60);
-				rx.enableNotch(dspCfg.rx.notch_enabled);
-				rx.setNotchMode(dspCfg.rx.notch_mode);
-				rx.setNotch(dspCfg.rx.notch_freq, dspCfg.rx.notch_q);
-				rx.enableBandpass(dspCfg.rx.bandpass_enabled);
-				rx.setBandpassPreset(dspCfg.rx.bandpass_preset);
-				rx.setBandpass(dspCfg.rx.bandpass_center, dspCfg.rx.bandpass_width);
-				rx.enableNr(dspCfg.rx.nr_enabled);
-				rx.setNrAmount(dspCfg.rx.nr_amount);
-			}
-			const tx = txDspChain;
-			if (tx) {
-				tx.enableHighpass(dspCfg.tx.highpass_enabled);
-				tx.setHighpass(dspCfg.tx.highpass_freq);
-				tx.enableLowpass(dspCfg.tx.lowpass_enabled);
-				tx.setLowpass(dspCfg.tx.lowpass_freq);
-				tx.enableEq(dspCfg.tx.eq_enabled);
-				tx.setBass(dspCfg.tx.eq_bass_gain);
-				tx.setMid(dspCfg.tx.eq_mid_gain);
-				tx.setTreble(dspCfg.tx.eq_treble_gain);
-				tx.enableCompressor(dspCfg.tx.compressor_enabled);
-				if (dspCfg.tx.compressor_preset !== 'off') {
-					tx.setCompressorPreset(dspCfg.tx.compressor_preset);
-				}
-				tx.setCompressor(
-					dspCfg.tx.compressor_threshold,
-					dspCfg.tx.compressor_ratio,
-					dspCfg.tx.compressor_attack,
-					dspCfg.tx.compressor_release,
-				);
-				tx.enableLimiter(dspCfg.tx.limiter_enabled);
-				tx.setLimiterThreshold(dspCfg.tx.limiter_threshold);
-				tx.enableGate(dspCfg.tx.gate_enabled);
-				tx.setGateThreshold(dspCfg.tx.gate_threshold);
-			}
+			if (rxDspChain) applyRxDspConfig(rxDspChain, dspCfg.rx);
+			if (txDspChain) applyTxDspConfig(txDspChain, dspCfg.tx);
 		} catch (e) {
 			console.warn('[DSP] Failed to load DSP config from backend, using defaults:', e);
 		}
