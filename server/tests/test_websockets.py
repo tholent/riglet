@@ -142,6 +142,54 @@ def test_ws_control_nonexistent_radio_closes_4004() -> None:
         ws.receive_json()
 
 
+def test_ws_rf_gain_echo() -> None:
+    """Send rf_gain command, verify echo contains updated rf_gain."""
+    with TestClient(app) as client:
+        radio = inject_sim_radio()
+        radio.rf_gain = 50
+
+        with client.websocket_connect("/api/radio/r1/ws/control") as ws:
+            ws.receive_json()  # consume initial snapshot
+            ws.send_json({"type": "rf_gain", "level": 80})
+            response = ws.receive_json()
+
+    assert response["type"] == "state"
+    assert response["rf_gain"] == 80
+    assert radio.rf_gain == 80
+
+
+def test_ws_squelch_echo() -> None:
+    """Send squelch command, verify echo contains updated squelch."""
+    with TestClient(app) as client:
+        radio = inject_sim_radio()
+        radio.squelch = 0
+
+        with client.websocket_connect("/api/radio/r1/ws/control") as ws:
+            ws.receive_json()  # consume initial snapshot
+            ws.send_json({"type": "squelch", "level": 25})
+            response = ws.receive_json()
+
+    assert response["type"] == "state"
+    assert response["squelch"] == 25
+    assert radio.squelch == 25
+
+
+def test_ws_initial_state_includes_rf_squelch() -> None:
+    """Initial state snapshot includes rf_gain and squelch keys."""
+    with TestClient(app) as client:
+        radio = inject_sim_radio()
+        radio.rf_gain = 50
+        radio.squelch = 0
+
+        with client.websocket_connect("/api/radio/r1/ws/control") as ws:
+            msg = ws.receive_json()
+
+    assert "rf_gain" in msg
+    assert "squelch" in msg
+    assert msg["rf_gain"] == 50
+    assert msg["squelch"] == 0
+
+
 # ---------------------------------------------------------------------------
 # Audio WebSocket tests (simulation mode)
 # ---------------------------------------------------------------------------

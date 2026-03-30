@@ -77,6 +77,9 @@ class RadioInstance:
         self.vfo: str = "VFOA"
         self.swr: float = 1.0
         self.ctcss_tone: float = 0.0
+        # RF Gain / Squelch
+        self.rf_gain: int = 50
+        self.squelch: int = 0
 
         # WebSocket channels (set externally by router handlers)
         self.ws_control: WebSocket | None = None
@@ -359,6 +362,76 @@ class RadioInstance:
         await self.send_command(rf"+\set_ctcss_tone {tone_hz}")
         self.ctcss_tone = tone
 
+    async def get_rf_gain(self) -> int:
+        """Query RF gain level.  Returns int 0-100.
+
+        Hamlib reports float 0.0-1.0 for ``get_level RF``.
+        In simulation mode, returns the stored value.
+        On rigctld error (feature not available), returns stored value.
+        """
+        if self.simulation:
+            return self.rf_gain
+        try:
+            raw = await self.send_command(r"+\get_level RF")
+            for line in raw.splitlines():
+                stripped = line.strip()
+                if stripped:
+                    try:
+                        return round(float(stripped) * 100)
+                    except ValueError:
+                        pass
+            raise RigctldError(-8, f"Cannot parse get_level RF response: {raw!r}")
+        except RigctldError:
+            return self.rf_gain
+
+    async def set_rf_gain(self, level: int) -> None:
+        """Set RF gain level (0-100).
+
+        Converts to 0.0-1.0 float for Hamlib ``set_level RF``.
+        """
+        if level < 0 or level > 100:
+            raise RigctldError(-1, f"RF gain level must be 0-100, got {level}")
+        if self.simulation:
+            self.rf_gain = level
+            return
+        await self.send_command(rf"+\set_level RF {level / 100.0:.2f}")
+        self.rf_gain = level
+
+    async def get_squelch(self) -> int:
+        """Query squelch level.  Returns int 0-100.
+
+        Hamlib reports float 0.0-1.0 for ``get_level SQL``.
+        In simulation mode, returns the stored value.
+        On rigctld error (feature not available), returns stored value.
+        """
+        if self.simulation:
+            return self.squelch
+        try:
+            raw = await self.send_command(r"+\get_level SQL")
+            for line in raw.splitlines():
+                stripped = line.strip()
+                if stripped:
+                    try:
+                        return round(float(stripped) * 100)
+                    except ValueError:
+                        pass
+            raise RigctldError(-8, f"Cannot parse get_level SQL response: {raw!r}")
+        except RigctldError:
+            return self.squelch
+
+    async def set_squelch(self, level: int) -> None:
+        """Set squelch level (0-100).
+
+        Converts to 0.0-1.0 float for Hamlib ``set_level SQL``.
+        """
+        if level < 0 or level > 100:
+            raise RigctldError(-1, f"Squelch level must be 0-100, got {level}")
+        if self.simulation:
+            self.squelch = level
+            return
+        await self.send_command(rf"+\set_level SQL {level / 100.0:.2f}")
+        self.squelch = level
+
     async def get_smeter(self) -> tuple[int, int, int]:
         """Return S-meter reading as (S-units 0-9, dB_over_s9, raw_dBm).
 
@@ -548,6 +621,8 @@ class RadioManager:
                 "vfo": inst.vfo,
                 "swr": inst.swr,
                 "ctcss_tone": inst.ctcss_tone,
+                "rf_gain": inst.rf_gain,
+                "squelch": inst.squelch,
             }
             for inst in self.radios.values()
         ]

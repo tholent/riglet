@@ -297,7 +297,8 @@ Extended CAT capabilities (where supported by Hamlib):
 - **VFO control**: Multiple VFO awareness and switching
 - **CTCSS/DCS tones**: Set and query subtone settings
 - **SWR reading**: Query SWR meter when available
-- **RF gain**: Adjust RF gain at the radio (where supported)
+- **RF gain**: Adjust RF gain at the radio via Hamlib `RF` level (0.0-1.0, normalized to 0-100%)
+- **Squelch**: Adjust hardware squelch at the radio via Hamlib `SQL` level (0.0-1.0, normalized to 0-100%)
 
 ### 2. Audio (RX and TX)
 
@@ -390,8 +391,7 @@ The display layout is fully configurable:
 - **PTT button**: Large, prominent. Supports VOX mode with configurable hang time and hot-mic prevention (audio gate threshold before VOX engages).
 - **Frequency dial**: Allow the frequency to be tuned manually with a dial. Scroll-wheel on hover.
 - **Volume dial**: Client-side browser audio level. Scroll-wheel on hover.
-- **Squelch dial**: Client-side audio squelch. Scroll-wheel on hover.
-- **RF gain**: Where radio supports remote adjustment via Hamlib; otherwise client-side gain control.
+- **RF Gain / Squelch knob**: A combined knob below AF Gain that switches between RF Gain and Squelch functions. A small toggle switch beneath the knob selects the active function. The toggle auto-follows the current mode (RF Gain for SSB/CW, Squelch for FM/AM) but can be overridden manually. Both values are tracked independently -- switching functions preserves the previous value. Both controls operate on the radio's hardware via Hamlib (`get_level`/`set_level` for `RF` and `SQL` parameters), not client-side DSP. Range 0-100 (percentage), step 5. Radios that do not support the active function degrade gracefully.
 - **All dials**: Respond to scroll-wheel on hover for quick adjustment.
 
 ### Theming
@@ -489,7 +489,7 @@ riglet/
           noise-gate-worklet.js   # TX noise gate AudioWorklet (v0.3.0)
           vox.ts                  # VOX detector
           lufs.ts                 # LUFS metering
-        components/               # UI components (waterfall, controls, meters)
+        components/               # UI components (waterfall, controls, meters, RfSqlKnob)
         components/dsp/           # DSP UI components (v0.3.0)
           RxDspPillRow.svelte     # Pill row container for RX DSP
           DspPill.svelte          # Generic toggle pill

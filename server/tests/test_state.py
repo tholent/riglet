@@ -196,3 +196,109 @@ async def test_radio_manager_shutdown_idempotent() -> None:
     await manager.startup(config)
     await manager.shutdown()
     await manager.shutdown()
+
+
+# ---------------------------------------------------------------------------
+# RadioInstance — RF gain simulation
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_rf_gain_simulation_default() -> None:
+    """rf_gain defaults to 50 on a new RadioInstance."""
+    cfg = make_radio_config()
+    radio = RadioInstance("r1", cfg)
+    radio.simulation = True
+    assert radio.rf_gain == 50
+
+
+@pytest.mark.asyncio
+async def test_set_rf_gain_simulation() -> None:
+    """set_rf_gain() in simulation mode stores the value."""
+    cfg = make_radio_config()
+    radio = RadioInstance("r1", cfg)
+    radio.simulation = True
+    await radio.set_rf_gain(75)
+    assert radio.rf_gain == 75
+
+
+@pytest.mark.asyncio
+async def test_set_rf_gain_simulation_bounds() -> None:
+    """set_rf_gain() raises RigctldError for out-of-range values."""
+    from state import RigctldError
+
+    cfg = make_radio_config()
+    radio = RadioInstance("r1", cfg)
+    radio.simulation = True
+
+    with pytest.raises(RigctldError):
+        await radio.set_rf_gain(-1)
+    with pytest.raises(RigctldError):
+        await radio.set_rf_gain(101)
+
+
+@pytest.mark.asyncio
+async def test_get_rf_gain_simulation() -> None:
+    """get_rf_gain() in simulation returns self.rf_gain."""
+    cfg = make_radio_config()
+    radio = RadioInstance("r1", cfg)
+    radio.simulation = True
+    radio.rf_gain = 60
+    result = await radio.get_rf_gain()
+    assert result == 60
+
+
+# ---------------------------------------------------------------------------
+# RadioInstance — Squelch simulation
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_squelch_simulation_default() -> None:
+    """squelch defaults to 0 on a new RadioInstance."""
+    cfg = make_radio_config()
+    radio = RadioInstance("r1", cfg)
+    radio.simulation = True
+    assert radio.squelch == 0
+
+
+@pytest.mark.asyncio
+async def test_set_squelch_simulation() -> None:
+    """set_squelch() in simulation mode stores the value."""
+    cfg = make_radio_config()
+    radio = RadioInstance("r1", cfg)
+    radio.simulation = True
+    await radio.set_squelch(30)
+    assert radio.squelch == 30
+
+
+@pytest.mark.asyncio
+async def test_get_squelch_simulation() -> None:
+    """get_squelch() in simulation returns self.squelch."""
+    cfg = make_radio_config()
+    radio = RadioInstance("r1", cfg)
+    radio.simulation = True
+    radio.squelch = 45
+    result = await radio.get_squelch()
+    assert result == 45
+
+
+# ---------------------------------------------------------------------------
+# RadioManager — status includes rf_gain and squelch
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_radio_manager_status_includes_rf_gain_and_squelch() -> None:
+    """status() includes rf_gain and squelch for each radio."""
+    cfg = make_radio_config(radio_id="r1", enabled=False)
+    config = make_riglet_config(radios=[cfg])
+    manager = RadioManager()
+    await manager.startup(config)
+    statuses = manager.status()
+    assert len(statuses) == 1
+    assert "rf_gain" in statuses[0]
+    assert "squelch" in statuses[0]
+    assert statuses[0]["rf_gain"] == 50
+    assert statuses[0]["squelch"] == 0
+    await manager.shutdown()

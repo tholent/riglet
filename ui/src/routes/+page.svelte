@@ -180,6 +180,8 @@
 		if (m.vfo !== undefined) radio = { ...radio, vfo: m.vfo as string };
 		if (m.swr !== undefined) radio = { ...radio, swr: m.swr as number };
 		if (m.ctcss_tone !== undefined) radio = { ...radio, ctcss_tone: m.ctcss_tone as number };
+		if (m.rf_gain !== undefined) radio = { ...radio, rf_gain: m.rf_gain as number };
+		if (m.squelch !== undefined) radio = { ...radio, squelch: m.squelch as number };
 		radioState.set(radio);
 	}
 
@@ -416,7 +418,7 @@
 					</div>
 					<div class="control-block">
 						<div class="freq-knob-row">
-							<AudioControls {radioId} {rxVolume} {txGain} audioManager={audioMgr} />
+							<AudioControls {radioId} {rxVolume} {txGain} audioManager={audioMgr} rfGain={radio.rf_gain ?? 50} squelch={radio.squelch ?? 0} mode={radio.mode} {controlWs} />
 							<div class="freq-dsp-col">
 								<FrequencyDisplay freq={radio.freq} {controlWs} {presets} />
 								<RxDspPillRow {rxDspChain} on:change={(e) => handleRxDspChange(e.detail)} />
@@ -461,7 +463,7 @@
 							{:else if panel.component === 'frequency'}
 								<div class="inner-block">
 									<div class="freq-knob-row">
-										<AudioControls {radioId} {rxVolume} {txGain} audioManager={audioMgr} />
+										<AudioControls {radioId} {rxVolume} {txGain} audioManager={audioMgr} rfGain={radio.rf_gain ?? 50} squelch={radio.squelch ?? 0} mode={radio.mode} {controlWs} />
 										<div class="freq-dsp-col">
 											<FrequencyDisplay freq={radio.freq} {controlWs} {presets} />
 											<RxDspPillRow {rxDspChain} on:change={(e) => handleRxDspChange(e.detail)} />
@@ -491,7 +493,7 @@
 								<!-- S-meter is now the sidebar of VisualizationPanel -->
 							{:else if panel.component === 'audio'}
 								<div class="inner-block">
-									<AudioControls {radioId} {rxVolume} {txGain} audioManager={audioMgr} />
+									<AudioControls {radioId} {rxVolume} {txGain} audioManager={audioMgr} rfGain={radio.rf_gain ?? 50} squelch={radio.squelch ?? 0} mode={radio.mode} {controlWs} />
 								</div>
 							{:else if panel.component === 'dsp'}
 								<!-- legacy dsp panel removed -->

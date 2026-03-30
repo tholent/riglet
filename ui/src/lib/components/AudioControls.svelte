@@ -2,15 +2,21 @@
 	import { untrack } from 'svelte';
 	import { postAudioVolume } from '$lib/api.js';
 	import type { AudioManager } from '$lib/audio/audio-manager.js';
+	import type { ControlWebSocket } from '$lib/websocket.js';
 	import Knob from './Knob.svelte';
+	import RfSqlKnob from './RfSqlKnob.svelte';
 
 	interface Props {
 		radioId: string;
 		rxVolume: number;
 		txGain: number;
 		audioManager: AudioManager | null;
+		rfGain?: number;
+		squelch?: number;
+		mode?: string;
+		controlWs?: ControlWebSocket | null;
 	}
-	let { radioId, rxVolume = 50, txGain = 50, audioManager }: Props = $props();
+	let { radioId, rxVolume = 50, txGain = 50, audioManager, rfGain = 50, squelch = 0, mode = 'USB', controlWs = null }: Props = $props();
 
 	let localRx = $state(untrack(() => rxVolume));
 	let localTx = $state(untrack(() => txGain));
@@ -51,6 +57,7 @@
 		onchange={onRxChange}
 		onclick={toggleMute}
 	/>
+	<RfSqlKnob {rfGain} {squelch} {mode} {controlWs} />
 </div>
 
 <style>

@@ -219,6 +219,8 @@ async def ws_control(websocket: WebSocket, radio_id: str) -> None:
             "mode": radio.mode,
             "ptt": radio.ptt,
             "online": radio.online,
+            "rf_gain": radio.rf_gain,
+            "squelch": radio.squelch,
         }
     )
 
@@ -260,6 +262,12 @@ async def ws_control(websocket: WebSocket, radio_id: str) -> None:
                 elif msg_type == "ctcss":
                     await radio.set_ctcss(float(msg["tone"]))
                     await websocket.send_json({"type": "state", "ctcss_tone": radio.ctcss_tone})
+                elif msg_type == "rf_gain":
+                    await radio.set_rf_gain(int(msg["level"]))
+                    await websocket.send_json({"type": "state", "rf_gain": radio.rf_gain})
+                elif msg_type == "squelch":
+                    await radio.set_squelch(int(msg["level"]))
+                    await websocket.send_json({"type": "state", "squelch": radio.squelch})
                 else:
                     await websocket.send_json(
                         {

@@ -44,6 +44,8 @@ export interface RadioState {
 	vfo?: string;
 	swr?: number;
 	ctcss_tone?: number;
+	rf_gain?: number;
+	squelch?: number;
 }
 
 export interface SerialDevice {
