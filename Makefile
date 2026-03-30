@@ -1,6 +1,6 @@
 .PHONY: help install install-server install-ui \
         dev server ui \
-        test test-server test-ui lint lint-server lint-ui lint-fix typecheck check \
+        test test-server test-ui lint lint-server lint-ui lint-fix lint-ui-fix typecheck check \
         build clean
 
 # ── Default ──────────────────────────────────────────────────────────────────
@@ -25,6 +25,7 @@ help:
 	@echo "    lint-server    Ruff linter (backend)"
 	@echo "    lint-ui        ESLint (frontend)"
 	@echo "    lint-fix       Ruff linter with auto-fix (backend)"
+	@echo "    lint-ui-fix    ESLint with auto-fix (frontend)"
 	@echo "    typecheck      mypy (backend) + svelte-check (frontend)"
 	@echo "    check          All checks: lint + typecheck + test + build"
 	@echo ""
@@ -70,6 +71,9 @@ lint-ui:
 
 lint-fix:
 	cd server && uv run ruff check --fix .
+
+lint-ui-fix:
+	cd ui && npx eslint src/ --fix
 
 typecheck:
 	cd server && uv run mypy .
