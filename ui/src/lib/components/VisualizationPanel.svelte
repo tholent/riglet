@@ -164,6 +164,7 @@
 	let ws: WebSocket | null = null;
 	let ro: ResizeObserver | null = null;
 	let spectrumRo: ResizeObserver | null = null;
+	let mounted = false;
 
 	// -----------------------------------------------------------------------
 	// WebSocket
@@ -262,7 +263,7 @@
 
 	$effect(() => {
 		const m = mode;
-		if (renderer || rendererContext) mountRenderer(m);
+		if (mounted) mountRenderer(m);
 		if (!CONFIGURABLE_MODES.has(m)) configOpen = false;
 	});
 
@@ -303,6 +304,7 @@
 		// Main canvas
 		canvas.width = wrapperEl.clientWidth || 256;
 		canvas.height = wrapperEl.clientHeight || 300;
+		mounted = true;
 		mountRenderer(mode);
 
 		ro = new ResizeObserver((entries) => {
