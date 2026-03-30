@@ -87,6 +87,7 @@ class RadioInstance:
         self._tune_task: asyncio.Task[None] | None = None
         self._tune_swr_count: int = 0  # consecutive polls with SWR < 2.0
         self._tune_poll_count: int = 0  # poll cycles since tuning started
+        self._external_tuning: bool = False  # True while external_tune loop owns PTT
 
         # Capability caches (None = unknown, True/False = tested)
         self._supports_vfo_op_tune: bool | None = None
@@ -454,6 +455,7 @@ class RadioInstance:
 
         self.tuning = True
         self._tune_swr_count = 0
+        self.swr = 3.5  # reset so poll-loop convergence doesn't fire on initial swr=1.0
 
         if self.simulation:
             async def _sim_tune() -> None:
@@ -536,6 +538,8 @@ class RadioInstance:
 
         self.tuning = True
         self._tune_swr_count = 0
+        self._external_tuning = True
+        self.swr = 3.5  # reset SWR so poll-loop convergence doesn't fire prematurely
 
         # Key PTT immediately so callers see ptt=True before the task runs.
         # For real hardware the key command is sent inside _external_tune_loop.
@@ -581,6 +585,7 @@ class RadioInstance:
         except asyncio.CancelledError:
             # Cancelled path: clear flags only — stop_tune() owns the hardware unkey.
             self.tuning = False
+            self._external_tuning = False
             self._tune_task = None
             raise  # propagate so the task is marked cancelled
 
@@ -592,6 +597,7 @@ class RadioInstance:
                 await self.send_command(r"+\set_ptt 0")
             self.ptt = False
         self.tuning = False
+        self._external_tuning = False
         self._tune_task = None
         if self.ws_control is not None:
             with contextlib.suppress(Exception):
@@ -614,6 +620,7 @@ class RadioInstance:
         # Ensure flags and hardware are clean regardless of how the task ended.
         was_ptt = self.ptt
         self.tuning = False
+        self._external_tuning = False
         self.ptt = False
         if was_ptt and not self.simulation:
             with contextlib.suppress(Exception):
@@ -677,8 +684,11 @@ class RadioInstance:
                     changed["swr"] = new_swr
                     self.swr = new_swr
 
-                # Tune completion detection (built-in tune: poll converges SWR)
-                if self.tuning:
+                # Tune completion detection: built-in tune only.
+                # External tune manages its own completion via _external_tune_loop;
+                # applying the convergence heuristic there would prematurely clear
+                # tuning=False while PTT is still held.
+                if self.tuning and not self._external_tuning:
                     if new_swr < 2.0:
                         self._tune_swr_count += 1
                     else:
