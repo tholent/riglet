@@ -226,12 +226,11 @@ async def test_protected_route_with_cookie(
 ) -> None:
     """GET /api/config returns 200 when valid cookie is present."""
     client, _secrets_path = auth_client
-    # Log in to get a session cookie
+    # Log in to get a session cookie (httpx stores it in the client jar automatically)
     login_resp = await client.post("/api/auth/login", json={"password": "testpass1"})
     assert login_resp.status_code == 200
-    token = login_resp.cookies[SESSION_COOKIE_NAME]
 
-    resp = await client.get("/api/config", cookies={SESSION_COOKIE_NAME: token})
+    resp = await client.get("/api/config")
     assert resp.status_code == 200
 
 
@@ -250,19 +249,16 @@ async def test_logout_clears_session(
     auth_client: tuple[httpx.AsyncClient, Path],
 ) -> None:
     client, _secrets_path = auth_client
-    # Log in
+    # Log in (httpx stores the session cookie in the client jar automatically)
     login_resp = await client.post("/api/auth/login", json={"password": "testpass1"})
     assert login_resp.status_code == 200
-    token = login_resp.cookies[SESSION_COOKIE_NAME]
 
     # Confirm access works
-    resp = await client.get("/api/config", cookies={SESSION_COOKIE_NAME: token})
+    resp = await client.get("/api/config")
     assert resp.status_code == 200
 
     # Log out (clears cookie on client side via max_age=0)
-    logout_resp = await client.post(
-        "/api/auth/logout", cookies={SESSION_COOKIE_NAME: token}
-    )
+    logout_resp = await client.post("/api/auth/logout")
     assert logout_resp.status_code == 200
     # After logout the cookie is gone; subsequent requests without cookie → 401.
     resp2 = await client.get("/api/config")
@@ -274,14 +270,11 @@ async def test_auth_status_authenticated(
     auth_client: tuple[httpx.AsyncClient, Path],
 ) -> None:
     client, _ = auth_client
-    # Log in to obtain cookie
+    # Log in (httpx stores the session cookie in the client jar automatically)
     login_resp = await client.post("/api/auth/login", json={"password": "testpass1"})
     assert login_resp.status_code == 200
-    token = login_resp.cookies[SESSION_COOKIE_NAME]
 
-    resp = await client.get(
-        "/api/auth/status", cookies={SESSION_COOKIE_NAME: token}
-    )
+    resp = await client.get("/api/auth/status")
     assert resp.status_code == 200
     data = resp.json()
     assert data["password_set"] is True
