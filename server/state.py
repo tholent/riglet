@@ -547,7 +547,12 @@ class RadioInstance:
         )
 
     async def _external_tune_loop(self, duration_s: float) -> None:
-        """Carrier loop for external tune: keys PTT, holds, then unkeys."""
+        """Carrier loop for external tune: keys PTT, holds, then unkeys.
+
+        Cancellation path: raises CancelledError after clearing flags so that
+        stop_tune() can perform the hardware unkey safely without fighting
+        Python's CancelledError-at-await behaviour inside finally blocks.
+        """
         try:
             # Key PTT directly (bypass interlock — we own tuning=True).
             # Simulation already set ptt=True in external_tune(); real hardware keys here.
@@ -564,49 +569,55 @@ class RadioInstance:
 
             while elapsed < duration_s:
                 # Safety: abort if WS disconnects (prevents stuck transmitter).
-                # In simulation mode ws_control is legitimately None; only apply
-                # this check for real hardware where a stuck transmitter is dangerous.
                 if not self.simulation and self.ws_control is None:
                     break
                 await asyncio.sleep(step)
                 elapsed += step
                 step_idx += 1
-                # Linearly interpolate SWR down in simulation
                 if self.simulation:
                     t = min(1.0, step_idx / steps_total)
                     self.swr = round(swr_start + t * (swr_end - swr_start), 2)
 
-        finally:
-            # Always unkey
-            if self.simulation:
-                self.ptt = False
-            else:
-                with contextlib.suppress(Exception):
-                    await self.send_command(r"+\set_ptt 0")
-                self.ptt = False
+        except asyncio.CancelledError:
+            # Cancelled path: clear flags only — stop_tune() owns the hardware unkey.
             self.tuning = False
             self._tune_task = None
-            if self.ws_control is not None:
-                with contextlib.suppress(Exception):
-                    await self.ws_control.send_json(
-                        {
-                            "type": "tune_complete",
-                            "success": self.swr < 2.0,
-                            "final_swr": self.swr,
-                        }
-                    )
+            raise  # propagate so the task is marked cancelled
+
+        # Natural completion path: we perform the unkey ourselves.
+        if self.simulation:
+            self.ptt = False
+        else:
+            with contextlib.suppress(Exception):
+                await self.send_command(r"+\set_ptt 0")
+            self.ptt = False
+        self.tuning = False
+        self._tune_task = None
+        if self.ws_control is not None:
+            with contextlib.suppress(Exception):
+                await self.ws_control.send_json(
+                    {
+                        "type": "tune_complete",
+                        "success": self.swr < 2.0,
+                        "final_swr": self.swr,
+                    }
+                )
 
     async def stop_tune(self) -> None:
-        """Abort any in-progress tune cycle."""
-        if self._tune_task is not None and not self._tune_task.done():
-            self._tune_task.cancel()
-            with contextlib.suppress(asyncio.CancelledError):
-                await self._tune_task
+        """Abort any in-progress tune cycle and release PTT."""
+        task = self._tune_task
         self._tune_task = None
-        if self.tuning:
-            self.tuning = False
-        if self.ptt:
-            await self.set_ptt(False)
+        if task is not None and not task.done():
+            task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await task
+        # Ensure flags and hardware are clean regardless of how the task ended.
+        was_ptt = self.ptt
+        self.tuning = False
+        self.ptt = False
+        if was_ptt and not self.simulation:
+            with contextlib.suppress(Exception):
+                await self.send_command(r"+\set_ptt 0")
 
     async def get_smeter(self) -> tuple[int, int, int]:
         """Return S-meter reading as (S-units 0-9, dB_over_s9, raw_dBm).

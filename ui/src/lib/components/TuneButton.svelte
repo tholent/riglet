@@ -66,10 +66,10 @@
 		class:active={tuning}
 		onclick={tuning ? stopTune : startTune}
 		onkeydown={onKeydown}
-		disabled={ptt}
+		disabled={ptt && !tuning}
 		aria-label={tuning ? 'Tuning — press to abort' : 'Start tune cycle'}
 		aria-pressed={tuning}
-		title={ptt ? 'Cannot tune while transmitting' : tuning ? 'Click to abort' : 'Start tune'}
+		title={ptt && !tuning ? 'Cannot tune while transmitting' : tuning ? 'Click to abort' : 'Start tune'}
 	>
 		{#if tuning}
 			<span class="spinner" aria-hidden="true"></span>
