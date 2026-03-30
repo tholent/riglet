@@ -48,7 +48,7 @@
 					</tr>
 				</thead>
 				<tbody>
-					{#each config.radios as r}
+					{#each config.radios as r (r.id)}
 						<tr>
 							<td>{r.name}</td>
 							<td><code>{r.serial_port || '—'}</code></td>

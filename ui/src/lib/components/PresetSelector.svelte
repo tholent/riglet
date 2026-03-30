@@ -10,7 +10,7 @@
 		controlWs: ControlWebSocket | null;
 		onPresetsChange?: (presets: PresetConfig[]) => void;
 	}
-	let { radioId, currentFreqMhz, controlWs, onPresetsChange }: Props = $props();
+	let { currentFreqMhz, controlWs, onPresetsChange }: Props = $props();
 
 	let presets = $state<PresetConfig[]>([]);
 	let loading = $state(false);
@@ -185,10 +185,10 @@
 		<p class="hint">No presets saved.</p>
 	{:else}
 		<div class="preset-list" role="list">
-			{#each bandOrder() as band}
+			{#each bandOrder() as band (band)}
 				<div class="band-group">
 					<span class="band-label">{band}</span>
-					{#each presetsByBand().get(band) ?? [] as preset}
+					{#each presetsByBand().get(band) ?? [] as preset (preset.id)}
 						<div class="preset-row">
 							<button
 								class="preset-item"

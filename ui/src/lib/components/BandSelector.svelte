@@ -64,7 +64,7 @@
 </script>
 
 <div class="band-selector" role="group" aria-label="Band selector">
-	{#each bands() as band, i}
+	{#each bands() as band, i (band.name)}
 		{@const enabled = isEnabled(band)}
 		<button
 			class="band-pill"

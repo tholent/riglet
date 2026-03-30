@@ -103,7 +103,7 @@
 	<header>
 		<h1>Riglet Setup</h1>
 		<nav class="steps">
-			{#each STEPS as label, i}
+			{#each STEPS as label, i (label)}
 				<button
 					class="step-pill"
 					class:active={i === step}

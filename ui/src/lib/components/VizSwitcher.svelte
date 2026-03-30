@@ -44,7 +44,7 @@
 </script>
 
 <div class="viz-switcher" role="group" aria-label="Visualization mode selector">
-	{#each MODES as opt, i}
+	{#each MODES as opt, i (opt.mode)}
 		<button
 			class="viz-btn"
 			class:active={mode === opt.mode}

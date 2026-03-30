@@ -177,7 +177,6 @@
 </script>
 
 {#if open}
-	<!-- svelte-ignore a11y_no_static_element_interactions -->
 	<div
 		class="tx-dsp-panel"
 		role="dialog"
@@ -306,7 +305,7 @@
 			</summary>
 			<div class="section-body" class:disabled={!compEnabled}>
 				<div class="preset-row">
-					{#each (['light', 'medium', 'heavy', 'manual'] as const) as preset}
+					{#each (['light', 'medium', 'heavy', 'manual'] as const) as preset (preset)}
 						<button
 							class="preset-pill"
 							class:active={compPreset === preset}

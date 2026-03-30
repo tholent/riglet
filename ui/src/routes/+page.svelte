@@ -131,7 +131,7 @@
 	}
 
 	let controlWs: ControlWebSocket | null = $state(null);
-	let audioWs: AudioWebSocket | null = null;
+	let _audioWs: AudioWebSocket | null = null;
 	let audioMgr: AudioManager | null = $state(null);
 	let rxDspChain: RxDspChain | null = $state(null);
 	let txDspChain: TxDspChain | null = $state(null);
@@ -329,7 +329,7 @@
 			txPcm = f32;
 		};
 		aws.connect();
-		audioWs = aws;
+		_audioWs = aws;
 
 		// Start TX capture (mic) alongside RX — PTT gating happens in worklet
 		await audioMgr.startTx();
@@ -454,7 +454,7 @@
 					style="grid-template-columns: {layout.columnWidths ?? `repeat(${layout.columns}, 1fr)`};"
 					aria-label="Radio control layout"
 				>
-					{#each Array.from({ length: layout.columns }, (_, i) => i + 1) as col}
+					{#each Array.from({ length: layout.columns }, (_, i) => i + 1) as col (col)}
 					<div class="layout-col">
 					{#each getColPanels(col) as panel (panel.id)}
 						<div

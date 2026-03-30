@@ -1,6 +1,6 @@
 .PHONY: help install install-server install-ui \
         dev server ui \
-        test test-server test-ui lint lint-fix typecheck check \
+        test test-server test-ui lint lint-server lint-ui lint-fix typecheck check \
         build clean
 
 # ── Default ──────────────────────────────────────────────────────────────────
@@ -21,7 +21,9 @@ help:
 	@echo "    test           Run all tests (backend + frontend)"
 	@echo "    test-server    Run backend pytest suite"
 	@echo "    test-ui        Run frontend vitest suite"
-	@echo "    lint           Ruff linter (backend)"
+	@echo "    lint           Lint both backend and frontend"
+	@echo "    lint-server    Ruff linter (backend)"
+	@echo "    lint-ui        ESLint (frontend)"
 	@echo "    lint-fix       Ruff linter with auto-fix (backend)"
 	@echo "    typecheck      mypy (backend) + svelte-check (frontend)"
 	@echo "    check          All checks: lint + typecheck + test + build"
@@ -58,8 +60,13 @@ test-server:
 test-ui:
 	cd ui && npm run test
 
-lint:
+lint: lint-server lint-ui
+
+lint-server:
 	cd server && uv run ruff check .
+
+lint-ui:
+	cd ui && npx eslint src/
 
 lint-fix:
 	cd server && uv run ruff check --fix .

@@ -100,7 +100,6 @@
 	{#if label}
 		<div class="knob-label">{label}</div>
 	{/if}
-	<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 	<svg
 		viewBox="0 0 {size} {size}"
 		width={size}

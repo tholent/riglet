@@ -70,7 +70,7 @@
 </script>
 
 <div class="mode-selector" role="group" aria-label="Operating mode selector">
-	{#each displayModes as m, i}
+	{#each displayModes as m, i (m)}
 		<button
 			class="mode-btn"
 			class:active={isActive(m)}

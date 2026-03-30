@@ -47,7 +47,7 @@
 	<h2>Map Audio Devices</h2>
 	<p>Assign audio input and output devices to each radio.</p>
 
-	{#each radios as radio, i}
+	{#each radios as radio, i (radio.id)}
 		<div class="radio-section">
 			<h3>{radio.name}</h3>
 
@@ -62,7 +62,7 @@
 							onchange={(e) => updateRadio(i, { audio_source: (e.target as HTMLSelectElement).value })}
 						>
 							<option value="">— none —</option>
-							{#each audioDevices as d}
+							{#each audioDevices as d (d.name)}
 								{@const claimer = getClaimedBy(d.source, radio.id)}
 								<option value={d.source} disabled={claimer !== null}>
 									{d.name}{claimer ? ` (In use by ${claimer})` : ''}
@@ -78,7 +78,7 @@
 							onchange={(e) => updateRadio(i, { audio_sink: (e.target as HTMLSelectElement).value })}
 						>
 							<option value="">— none —</option>
-							{#each audioDevices as d}
+							{#each audioDevices as d (d.name)}
 								{@const claimer = getClaimedBy(d.sink, radio.id)}
 								<option value={d.sink} disabled={claimer !== null}>
 									{d.name}{claimer ? ` (In use by ${claimer})` : ''}

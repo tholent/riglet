@@ -30,7 +30,7 @@
 		onchange={onChange}
 		aria-label="CTCSS tone selector"
 	>
-		{#each TONES as t}
+		{#each TONES as t (t)}
 			<option value={t}>{t === 0 ? 'Off' : `${t.toFixed(1)} Hz`}</option>
 		{/each}
 	</select>

@@ -248,7 +248,6 @@
 </script>
 
 {#if open}
-	<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 	<div
 		class="popover"
 		role="dialog"
@@ -474,7 +473,7 @@
 				</label>
 			</div>
 			<div class="row preset-row">
-				{#each (['voice', 'cw', 'manual'] as const) as preset}
+				{#each (['voice', 'cw', 'manual'] as const) as preset (preset)}
 					<button
 						class="preset-pill"
 						class:active={bpPreset === preset}

@@ -98,7 +98,6 @@
 
 <div class="tuning-wrap" role="presentation">
 	<div class="tuning-title">VFO</div>
-	<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 	<svg
 		viewBox="0 0 {SIZE} {SIZE}"
 		width={SIZE}
@@ -120,7 +119,7 @@
 		<circle cx={CX} cy={CY} r={R_BEZEL} fill="#0f0f0f" stroke="#333" stroke-width="2" />
 
 		<!-- Tick marks -->
-		{#each ticks as deg, i}
+		{#each ticks as deg, i (deg)}
 			{@const isMajor = i % 9 === 0}
 			{@const p1 = polarXY(deg, isMajor ? R_TICK_INNER_MAJOR : R_TICK_INNER_MINOR)}
 			{@const p2 = polarXY(deg, R_TICK_OUTER)}

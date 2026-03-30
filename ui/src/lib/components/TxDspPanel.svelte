@@ -238,7 +238,6 @@
 
 <!-- ── Filter popovers ──────────────────────────────────────────── -->
 {#if openFilter}
-	<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 	<div
 		class="popover"
 		role="dialog"
@@ -286,7 +285,7 @@
 				</label>
 			</div>
 			<div class="pop-row preset-row" class:disabled={!compEnabled}>
-				{#each (['light', 'medium', 'heavy', 'manual'] as const) as preset}
+				{#each (['light', 'medium', 'heavy', 'manual'] as const) as preset (preset)}
 					<button
 						class="preset-pill"
 						class:active={compPreset === preset}
@@ -335,7 +334,7 @@
 				</label>
 			</div>
 			<div class="pop-row preset-row" class:disabled={!limEnabled}>
-				{#each (['soft', 'medium', 'hard', 'manual'] as const) as preset}
+				{#each (['soft', 'medium', 'hard', 'manual'] as const) as preset (preset)}
 					<button
 						class="preset-pill"
 						class:active={limPreset === preset}

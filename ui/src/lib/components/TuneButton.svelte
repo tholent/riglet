@@ -108,7 +108,7 @@
 	<!-- Duration pills (external mode only) -->
 	{#if tuneMethod === 'external'}
 		<div class="dur-row" role="group" aria-label="Tune duration">
-			{#each [3, 5, 10] as d}
+			{#each [3, 5, 10] as d (d)}
 				<button
 					class="dur-btn"
 					class:active={externalDuration === d}

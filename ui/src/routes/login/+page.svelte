@@ -33,7 +33,7 @@
 		try {
 			await postLogin(password);
 			await goto('/');
-		} catch (err) {
+		} catch {
 			error = 'Invalid password. Please try again.';
 			password = '';
 			passwordInput?.focus();

@@ -23,14 +23,14 @@
 	<h2>PTT Method</h2>
 	<p>Choose how each radio switches to transmit mode.</p>
 
-	{#each radios as radio, i}
+	{#each radios as radio, i (radio.id)}
 		<div class="radio-section">
 			<h3>{radio.name}</h3>
 			{#if radio.type === 'simulated'}
 				<p class="sim-note">Simulated radio — PTT is handled in software, no hardware method needed.</p>
 			{:else}
 				<div class="options">
-					{#each PTT_METHODS as method}
+					{#each PTT_METHODS as method (method.value)}
 						<label class="option" class:active={radio.ptt_method === method.value}>
 							<input
 								type="radio"

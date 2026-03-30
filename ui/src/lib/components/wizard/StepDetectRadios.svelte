@@ -124,7 +124,7 @@
 			<p class="hint">No serial devices detected. You can add a radio manually.</p>
 		{/if}
 
-		{#each radios as radio, i}
+		{#each radios as radio, i (radio.id)}
 			<div class="radio-card">
 				<div class="card-header">
 					<input
@@ -156,7 +156,7 @@
 								value={radio.hamlib_model}
 								onchange={(e) => updateRadio(i, { hamlib_model: parseInt((e.target as HTMLSelectElement).value) })}
 							>
-								{#each hamlibModels as m}
+								{#each hamlibModels as m (m.id)}
 									<option value={m.id}>{m.id} — {m.name}</option>
 								{/each}
 							</select>
