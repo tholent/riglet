@@ -112,9 +112,9 @@
 		width: 96px;
 		height: 96px;
 		border-radius: 50%;
-		border: 3px solid #555;
-		background: #1a1a1a;
-		color: #ccc;
+		border: 3px solid var(--er-ctrl-hover-border);
+		background: var(--er-panel-bg);
+		color: var(--er-ctrl-hover-text);
 		font-size: 1.4rem;
 		font-weight: 700;
 		cursor: pointer;
@@ -124,19 +124,19 @@
 	}
 
 	.ptt-btn:hover:not(.active) {
-		border-color: #888;
-		color: #fff;
+		border-color: var(--er-ctrl-text);
+		color: var(--er-accent-text);
 	}
 
 	.ptt-btn:focus-visible {
-		outline: 3px solid #4a9eff;
+		outline: 3px solid var(--er-accent);
 		outline-offset: 3px;
 	}
 
 	.ptt-btn.active {
-		background: #c62828;
-		border-color: #ef5350;
-		color: #fff;
+		background: var(--er-red-active);
+		border-color: var(--er-red);
+		color: var(--er-accent-text);
 		box-shadow: 0 0 16px rgba(239, 83, 80, 0.6);
 	}
 
@@ -150,41 +150,41 @@
 		padding: 4px 12px;
 		font-size: 0.78rem;
 		font-weight: 700;
-		background: #1a1a1a;
-		border: 1px solid #444;
+		background: var(--er-panel-bg);
+		border: 1px solid var(--er-ctrl-border);
 		border-radius: 4px;
-		color: #aaa;
+		color: var(--er-ctrl-text);
 		cursor: pointer;
 		letter-spacing: 0.06em;
 		transition: background 0.1s, border-color 0.1s, color 0.1s;
 	}
 
 	.vox-btn:hover:not(.active) {
-		border-color: #666;
-		color: #ccc;
+		border-color: var(--er-ctrl-hover-border);
+		color: var(--er-ctrl-hover-text);
 	}
 
 	.vox-btn.active {
-		background: #1b3a1b;
-		border-color: #4caf50;
-		color: #4caf50;
+		background: var(--er-green-bg);
+		border-color: var(--er-green);
+		color: var(--er-green);
 	}
 
 	.vox-btn:focus-visible {
-		outline: 2px solid #4a9eff;
+		outline: 2px solid var(--er-accent);
 		outline-offset: 2px;
 	}
 
 	.vox-indicator {
 		font-size: 0.72rem;
 		font-weight: 700;
-		color: #555;
+		color: var(--er-label);
 		letter-spacing: 0.08em;
 		transition: color 0.1s;
 	}
 
 	.vox-indicator.detecting {
-		color: #4caf50;
+		color: var(--er-green);
 		animation: pulse 0.6s ease-in-out infinite alternate;
 	}
 

@@ -73,8 +73,8 @@
 		display: flex;
 		flex-direction: row;
 		align-items: stretch;
-		background: #1a1a1a;
-		border: 1px solid #2a2a2a;
+		background: var(--er-panel-bg);
+		border: 1px solid var(--er-ctrl-bg);
 		box-sizing: border-box;
 		width: 100%;
 	}
@@ -85,7 +85,7 @@
 		justify-content: center;
 		padding: 10px 12px;
 		flex-shrink: 0;
-		border-right: 1px solid #222;
+		border-right: 1px solid var(--er-divider);
 	}
 
 	.ptt-dsp {
@@ -100,8 +100,8 @@
 		flex-direction: column;
 		align-items: center;
 		width: 68px;
-		background: #0d0d0d;
-		border-left: 1px solid #222;
+		background: var(--er-panel-dark);
+		border-left: 1px solid var(--er-divider);
 		padding: 4px 0;
 		gap: 4px;
 		flex-shrink: 0;
@@ -109,13 +109,13 @@
 
 	.lufs-left {
 		border-left: none;
-		border-right: 1px solid #222;
+		border-right: 1px solid var(--er-divider);
 	}
 
 	.lufs-toggle {
 		background: none;
 		border: none;
-		color: #555;
+		color: var(--er-label);
 		font-size: 0.6rem;
 		cursor: pointer;
 		padding: 2px;
@@ -123,6 +123,6 @@
 		flex-shrink: 0;
 	}
 
-	.lufs-toggle:hover { color: #aaa; }
-	.lufs-toggle:focus-visible { outline: 1px solid #4a9eff; outline-offset: 2px; }
+	.lufs-toggle:hover { color: var(--er-ctrl-text); }
+	.lufs-toggle:focus-visible { outline: 1px solid var(--er-accent); outline-offset: 2px; }
 </style>

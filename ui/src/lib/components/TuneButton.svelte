@@ -141,28 +141,28 @@
 		justify-content: center;
 		gap: 6px;
 		padding: 8px 10px;
-		border-left: 1px solid #222;
+		border-left: 1px solid var(--er-divider);
 	}
 
-	/* Panel section label — matches TxDspPanel column header convention */
+	/* Panel section label */
 	.col-label {
 		font-size: 0.55rem;
-		font-family: monospace;
+		font-family: var(--er-label-font);
 		font-weight: 700;
 		letter-spacing: 0.12em;
-		color: #444;
+		color: var(--er-label);
 		text-transform: uppercase;
 		user-select: none;
 	}
 
-	/* ── Tune trigger button — amber, larger than circle-btn ── */
+	/* ── Tune trigger — amber domain accent ── */
 	.tune-btn {
 		width: 52px;
 		height: 52px;
 		border-radius: 50%;
-		border: 1px solid #5a4000;
-		background: #252010;
-		color: #a07010;
+		border: 1px solid var(--er-amber-border);
+		background: var(--er-amber-panel);
+		color: var(--er-amber-border);
 		font-size: 1.1rem;
 		cursor: pointer;
 		display: flex;
@@ -174,26 +174,26 @@
 	}
 
 	.tune-btn:hover:not(:disabled):not(.active) {
-		border-color: #c08820;
-		color: #d4a020;
-		background: #2a2008;
+		border-color: var(--er-amber);
+		color: var(--er-amber);
+		background: var(--er-amber-bg);
 	}
 
 	.tune-btn.active {
-		border-color: #d4a020;
-		background: #2a1e00;
-		color: #f0c040;
-		box-shadow: 0 0 10px rgba(212, 160, 32, 0.45);
+		border-color: var(--er-amber);
+		background: var(--er-amber-bg);
+		color: var(--er-amber);
+		box-shadow: 0 0 10px rgba(240, 192, 64, 0.4);
 		animation: tune-pulse 1.1s ease-in-out infinite alternate;
 	}
 
 	.tune-btn:disabled {
-		opacity: 0.3;
+		opacity: var(--er-ctrl-disabled);
 		cursor: not-allowed;
 	}
 
 	.tune-btn:focus-visible {
-		outline: 2px solid #4a9eff;
+		outline: 2px solid var(--er-accent);
 		outline-offset: 3px;
 	}
 
@@ -202,14 +202,14 @@
 		line-height: 1;
 	}
 
-	/* ── Shared small circle button (ATU) ── */
+	/* ── ATU circle button ── */
 	.circle-btn {
 		width: 36px;
 		height: 36px;
 		border-radius: 50%;
-		border: 1px solid #3a3a3a;
-		background: #252525;
-		color: #777;
+		border: 1px solid var(--er-ctrl-border);
+		background: var(--er-ctrl-bg);
+		color: var(--er-ctrl-text);
 		font-size: 0.58rem;
 		font-weight: 700;
 		letter-spacing: 0.04em;
@@ -222,19 +222,19 @@
 	}
 
 	.circle-btn:hover:not(.active) {
-		border-color: #555;
-		background: #2e2e2e;
-		color: #ccc;
+		border-color: var(--er-ctrl-hover-border);
+		background: var(--er-ctrl-hover-bg);
+		color: var(--er-ctrl-hover-text);
 	}
 
 	.circle-btn.active {
-		background: #0284c7;
-		border-color: #0ea5e9;
-		color: #fff;
+		background: var(--er-accent-bg);
+		border-color: var(--er-accent);
+		color: var(--er-accent-text);
 	}
 
 	.circle-btn:focus-visible {
-		outline: 2px solid #4a9eff;
+		outline: 2px solid var(--er-accent);
 		outline-offset: 2px;
 	}
 
@@ -243,7 +243,7 @@
 		display: flex;
 		border-radius: 3px;
 		overflow: hidden;
-		border: 1px solid #333;
+		border: 1px solid var(--er-ctrl-border);
 	}
 
 	.seg-btn {
@@ -251,24 +251,24 @@
 		font-size: 0.58rem;
 		font-weight: 700;
 		letter-spacing: 0.04em;
-		background: #1a1a1a;
+		background: var(--er-panel-bg);
 		border: none;
-		color: #555;
+		color: var(--er-label);
 		cursor: pointer;
 		transition: background 0.1s, color 0.1s;
 	}
 
 	.seg-btn + .seg-btn {
-		border-left: 1px solid #333;
+		border-left: 1px solid var(--er-ctrl-border);
 	}
 
 	.seg-btn.active {
-		background: #1a2a1a;
-		color: #4caf50;
+		background: var(--er-accent-bg);
+		color: var(--er-accent);
 	}
 
 	.seg-btn:focus-visible {
-		outline: 1px solid #4a9eff;
+		outline: 1px solid var(--er-accent);
 		outline-offset: 1px;
 	}
 
@@ -282,28 +282,28 @@
 		padding: 2px 5px;
 		font-size: 0.58rem;
 		font-weight: 700;
-		background: #1a1a1a;
-		border: 1px solid #333;
+		background: var(--er-panel-bg);
+		border: 1px solid var(--er-ctrl-border);
 		border-radius: 3px;
-		color: #555;
+		color: var(--er-label);
 		cursor: pointer;
 		transition: background 0.1s, color 0.1s, border-color 0.1s;
 	}
 
 	.dur-btn.active {
-		background: #1a2030;
-		border-color: #4a9eff;
-		color: #4a9eff;
+		background: var(--er-accent-bg);
+		border-color: var(--er-accent);
+		color: var(--er-accent);
 	}
 
 	.dur-btn:focus-visible {
-		outline: 1px solid #4a9eff;
+		outline: 1px solid var(--er-accent);
 		outline-offset: 1px;
 	}
 
 	/* ── SWR readout ── */
 	.swr {
-		font-family: monospace;
+		font-family: var(--er-label-font);
 		font-size: 0.72rem;
 		font-weight: 700;
 		letter-spacing: 0.04em;
@@ -311,13 +311,13 @@
 	}
 
 	.swr-idle {
-		color: #333;
+		color: var(--er-divider);
 	}
 
 	/* ── Animations ── */
 	@keyframes tune-pulse {
-		from { box-shadow: 0 0 6px rgba(212, 160, 32, 0.35); }
-		to   { box-shadow: 0 0 16px rgba(212, 160, 32, 0.65); }
+		from { box-shadow: 0 0 6px rgba(240, 192, 64, 0.3); }
+		to   { box-shadow: 0 0 16px rgba(240, 192, 64, 0.6); }
 	}
 
 	@media (prefers-reduced-motion: reduce) {
@@ -329,8 +329,8 @@
 	.spinner {
 		width: 16px;
 		height: 16px;
-		border: 2px solid rgba(240, 192, 64, 0.25);
-		border-top-color: #f0c040;
+		border: 2px solid rgba(240, 192, 64, 0.2);
+		border-top-color: var(--er-amber);
 		border-radius: 50%;
 		animation: spin 0.7s linear infinite;
 	}

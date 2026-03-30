@@ -92,32 +92,32 @@
 
 	.toggle-label {
 		font-size: 0.6rem;
-		font-family: monospace;
+		font-family: var(--er-label-font);
 		text-transform: uppercase;
 		letter-spacing: 0.05em;
-		color: #555;
+		color: var(--er-label);
 		transition: color 0.15s;
 	}
 
 	.toggle-label.active {
-		color: #4af;
+		color: var(--er-accent);
 	}
 
 	.track {
 		position: relative;
 		width: 26px;
 		height: 13px;
-		background: #333;
+		background: var(--er-ctrl-border);
 		border-radius: 7px;
-		border: 1px solid #555;
+		border: 1px solid var(--er-ctrl-hover-border);
 		display: flex;
 		align-items: center;
 		transition: background 0.15s;
 	}
 
 	input:checked ~ .track {
-		background: #1a3a4a;
-		border-color: #4af;
+		background: var(--er-accent-bg);
+		border-color: var(--er-accent);
 	}
 
 	.thumb {
@@ -125,13 +125,13 @@
 		left: 2px;
 		width: 9px;
 		height: 9px;
-		background: #888;
+		background: var(--er-ctrl-text);
 		border-radius: 50%;
 		transition: left 0.15s, background 0.15s;
 	}
 
 	input:checked ~ .track .thumb {
 		left: 13px;
-		background: #4af;
+		background: var(--er-accent);
 	}
 </style>

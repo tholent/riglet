@@ -129,6 +129,47 @@
 	}
 }
 
+/* --- Eurorack module panel tokens (dark only — panels are always dark) --- */
+:root {
+	/* Panel backgrounds */
+	--er-panel-bg:   #1a1a1a;
+	--er-panel-dark: #141414;
+	--er-divider:    #222;
+
+	/* Control surfaces (buttons, tracks) */
+	--er-ctrl-bg:          #252525;
+	--er-ctrl-border:      #3a3a3a;
+	--er-ctrl-hover-bg:    #2e2e2e;
+	--er-ctrl-hover-border:#555;
+	--er-ctrl-hover-text:  #ccc;
+	--er-ctrl-text:        #888;
+	--er-ctrl-disabled:    0.35;
+
+	/* Section labels */
+	--er-label:      #555;
+	--er-label-font: monospace;
+
+	/* Primary accent — blue/cyan */
+	--er-accent:      #4a9eff;
+	--er-accent-bg:   #0d2040;
+	--er-accent-text: #fff;
+
+	/* Green accent — enabled/on states */
+	--er-green:    #4caf50;
+	--er-green-bg: #1b3a1b;
+
+	/* Amber accent — tune / RF active */
+	--er-amber:        #f0c040;
+	--er-amber-border: #d4a020;
+	--er-amber-bg:     #2a1e00;
+	--er-amber-panel:  #252010;
+
+	/* Red accent — PTT / danger */
+	--er-red:        #ef5350;
+	--er-red-active: #c62828;
+	--er-red-bg:     #3a1010;
+}
+
 /* --- Base reset / global defaults -------------------------- */
 *,
 *::before,

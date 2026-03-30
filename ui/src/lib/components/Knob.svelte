@@ -121,21 +121,21 @@
 		tabindex="0"
 	>
 		<!-- Background disc -->
-		<circle cx={CX} cy={CY} r={R + 5} fill="#141414" stroke="#2a2a2a" stroke-width="1.5" />
-		<!-- Track arc (gray) -->
-		<path d={arcPath(START_DEG, trackEndDeg, SWEEP_DEG, R)} fill="none" stroke="#2a2a2a" stroke-width="4" stroke-linecap="round" />
-		<!-- Value arc (blue) — only draw if non-trivial -->
+		<circle cx={CX} cy={CY} r={R + 5} fill="var(--er-panel-dark)" stroke="var(--er-ctrl-bg)" stroke-width="1.5" />
+		<!-- Track arc -->
+		<path d={arcPath(START_DEG, trackEndDeg, SWEEP_DEG, R)} fill="none" stroke="var(--er-ctrl-bg)" stroke-width="4" stroke-linecap="round" />
+		<!-- Value arc — only draw if non-trivial -->
 		{#if valueSweep > 1}
-			<path d={arcPath(START_DEG, valueDeg, valueSweep, R)} fill="none" stroke="#4a9eff" stroke-width="4" stroke-linecap="round" />
+			<path d={arcPath(START_DEG, valueDeg, valueSweep, R)} fill="none" stroke="var(--er-accent)" stroke-width="4" stroke-linecap="round" />
 		{/if}
 		<!-- Indicator dot -->
-		<circle cx={dot.x} cy={dot.y} r={size * 0.038} fill="#e0e0e0" />
+		<circle cx={dot.x} cy={dot.y} r={size * 0.038} fill="var(--er-ctrl-hover-text)" />
 		<!-- Value text in centre -->
 		<text
 			x={CX} y={CY + 1}
 			text-anchor="middle"
 			dominant-baseline="middle"
-			fill="#bbb"
+			fill="var(--er-ctrl-hover-border)"
 			font-size={size * 0.2}
 			font-family="monospace"
 		>{value}</text>
@@ -156,16 +156,16 @@
 		outline: none;
 	}
 	.knob-svg:focus-visible {
-		outline: 2px solid #4a9eff;
+		outline: 2px solid var(--er-accent);
 		outline-offset: 2px;
 		border-radius: 50%;
 	}
 	.knob-svg.dragging { cursor: grabbing; }
 	.knob-label {
 		font-size: 0.62rem;
-		color: #777;
+		color: var(--er-ctrl-text);
 		text-transform: uppercase;
 		letter-spacing: 0.07em;
-		font-family: monospace;
+		font-family: var(--er-label-font);
 	}
 </style>
