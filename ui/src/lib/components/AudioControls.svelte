@@ -63,7 +63,8 @@
 <style>
 	.audio-controls {
 		display: flex;
-		gap: 16px;
+		flex-direction: column;
+		gap: 8px;
 		align-items: center;
 	}
 </style>

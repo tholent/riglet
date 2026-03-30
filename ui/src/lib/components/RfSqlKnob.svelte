@@ -61,9 +61,13 @@
 		size={72}
 		{defaultValue}
 		{onchange}
-		{onclick}
 	/>
-	<div class="toggle-hint">{activeKnob === 'rf' ? 'RF' : 'SQL'} · click to switch</div>
+	<label class="toggle-switch" title="Toggle RF Gain / Squelch">
+		<span class="toggle-label" class:active={activeKnob === 'rf'}>RF</span>
+		<input type="checkbox" checked={activeKnob === 'sql'} onchange={onclick} />
+		<span class="track"><span class="thumb"></span></span>
+		<span class="toggle-label" class:active={activeKnob === 'sql'}>SQL</span>
+	</label>
 </div>
 
 <style>
@@ -71,15 +75,63 @@
 		display: flex;
 		flex-direction: column;
 		align-items: center;
-		gap: 2px;
+		gap: 4px;
 	}
 
-	.toggle-hint {
-		font-size: 0.55rem;
-		color: #555;
-		text-transform: uppercase;
-		letter-spacing: 0.06em;
+	.toggle-switch {
+		display: flex;
+		align-items: center;
+		gap: 5px;
+		cursor: pointer;
+		user-select: none;
+	}
+
+	.toggle-switch input {
+		display: none;
+	}
+
+	.toggle-label {
+		font-size: 0.6rem;
 		font-family: monospace;
-		white-space: nowrap;
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+		color: #555;
+		transition: color 0.15s;
+	}
+
+	.toggle-label.active {
+		color: #4af;
+	}
+
+	.track {
+		position: relative;
+		width: 26px;
+		height: 13px;
+		background: #333;
+		border-radius: 7px;
+		border: 1px solid #555;
+		display: flex;
+		align-items: center;
+		transition: background 0.15s;
+	}
+
+	input:checked ~ .track {
+		background: #1a3a4a;
+		border-color: #4af;
+	}
+
+	.thumb {
+		position: absolute;
+		left: 2px;
+		width: 9px;
+		height: 9px;
+		background: #888;
+		border-radius: 50%;
+		transition: left 0.15s, background 0.15s;
+	}
+
+	input:checked ~ .track .thumb {
+		left: 13px;
+		background: #4af;
 	}
 </style>
