@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onMount, untrack } from 'svelte';
 	import SmeterDisplay from '$lib/components/SmeterDisplay.svelte';
 	import VizSwitcher from '$lib/components/VizSwitcher.svelte';
 	import type { VisualizationMode } from '$lib/viz/types.js';
@@ -263,7 +263,7 @@
 
 	$effect(() => {
 		const m = mode;
-		if (mounted) mountRenderer(m);
+		if (mounted) untrack(() => mountRenderer(m));
 		if (!CONFIGURABLE_MODES.has(m)) configOpen = false;
 	});
 
