@@ -422,7 +422,7 @@
 					</div>
 					<div class="control-block">
 						<div class="freq-knob-row">
-							<AudioControls {radioId} {rxVolume} {txGain} audioManager={audioMgr} rfGain={radio.rf_gain ?? 50} squelch={radio.squelch ?? 0} mode={radio.mode} {controlWs} />
+							<AudioControls {radioId} {rxVolume} {txGain} audioManager={audioMgr} rfGain={radio.rf_gain ?? 50} squelch={radio.squelch ?? 0} mode={radio.mode} {controlWs} ptt={radio.ptt} tuning={radio.tuning ?? false} tunerEnabled={radio.tuner_enabled ?? false} swr={radio.swr ?? 1.0} />
 							<div class="freq-dsp-col">
 								<FrequencyDisplay freq={radio.freq} {controlWs} {presets} />
 								<RxDspPillRow {rxDspChain} on:change={(e) => handleRxDspChange(e.detail)} />
@@ -445,9 +445,6 @@
 						txPcm={txPcm}
 						{onTxGainChange}
 						onTxDspChange={handleTxDspChange}
-						tuning={radio.tuning ?? false}
-						tunerEnabled={radio.tuner_enabled ?? false}
-						swr={radio.swr ?? 1.0}
 					/>
 				</div>
 			{:else}
@@ -470,7 +467,7 @@
 							{:else if panel.component === 'frequency'}
 								<div class="inner-block">
 									<div class="freq-knob-row">
-										<AudioControls {radioId} {rxVolume} {txGain} audioManager={audioMgr} rfGain={radio.rf_gain ?? 50} squelch={radio.squelch ?? 0} mode={radio.mode} {controlWs} />
+										<AudioControls {radioId} {rxVolume} {txGain} audioManager={audioMgr} rfGain={radio.rf_gain ?? 50} squelch={radio.squelch ?? 0} mode={radio.mode} {controlWs} ptt={radio.ptt} tuning={radio.tuning ?? false} tunerEnabled={radio.tuner_enabled ?? false} swr={radio.swr ?? 1.0} />
 										<div class="freq-dsp-col">
 											<FrequencyDisplay freq={radio.freq} {controlWs} {presets} />
 											<RxDspPillRow {rxDspChain} on:change={(e) => handleRxDspChange(e.detail)} />
@@ -500,7 +497,7 @@
 								<!-- S-meter is now the sidebar of VisualizationPanel -->
 							{:else if panel.component === 'audio'}
 								<div class="inner-block">
-									<AudioControls {radioId} {rxVolume} {txGain} audioManager={audioMgr} rfGain={radio.rf_gain ?? 50} squelch={radio.squelch ?? 0} mode={radio.mode} {controlWs} />
+									<AudioControls {radioId} {rxVolume} {txGain} audioManager={audioMgr} rfGain={radio.rf_gain ?? 50} squelch={radio.squelch ?? 0} mode={radio.mode} {controlWs} ptt={radio.ptt} tuning={radio.tuning ?? false} tunerEnabled={radio.tuner_enabled ?? false} swr={radio.swr ?? 1.0} />
 								</div>
 							{:else if panel.component === 'dsp'}
 								<!-- legacy dsp panel removed -->

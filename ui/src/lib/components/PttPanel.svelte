@@ -1,7 +1,6 @@
 <script lang="ts">
 	import LufsMeter from './LufsMeter.svelte';
 	import PttButton from './PttButton.svelte';
-	import TuneButton from './TuneButton.svelte';
 	import TxDspPanel from './TxDspPanel.svelte';
 	import type { ControlWebSocket } from '$lib/websocket.js';
 	import type { TxDspChain } from '$lib/audio/tx-dsp-chain.js';
@@ -14,11 +13,8 @@
 		txPcm: Float32Array | null;
 		onTxGainChange: (v: number) => void;
 		onTxDspChange: (detail: Record<string, unknown>) => void;
-		tuning: boolean;
-		tunerEnabled: boolean;
-		swr: number;
 	}
-	let { ptt, controlWs, txGain, txDspChain, txPcm, onTxGainChange, onTxDspChange, tuning, tunerEnabled, swr }: Props = $props();
+	let { ptt, controlWs, txGain, txDspChain, txPcm, onTxGainChange, onTxDspChange }: Props = $props();
 
 	const LUFS_POSITION_KEY = 'riglet:pttLufsPosition';
 	type LufsPosition = 'left' | 'right';
@@ -55,10 +51,6 @@
 		<PttButton {ptt} {controlWs} />
 	</div>
 
-	<div class="ptt-tune">
-		<TuneButton {ptt} {tuning} tunerEnabled={tunerEnabled} {swr} {controlWs} />
-	</div>
-
 	<div class="ptt-dsp">
 		<TxDspPanel {txDspChain} {txGain} {onTxGainChange} on:change={(e) => onTxDspChange(e.detail)} />
 	</div>
@@ -88,15 +80,6 @@
 	}
 
 	.ptt-left {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		padding: 10px 12px;
-		flex-shrink: 0;
-		border-right: 1px solid #222;
-	}
-
-	.ptt-tune {
 		display: flex;
 		align-items: center;
 		justify-content: center;

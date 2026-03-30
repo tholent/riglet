@@ -10,22 +10,16 @@
 	}
 	let { ptt, tuning, tunerEnabled, swr, controlWs }: Props = $props();
 
-	const METHOD_KEY = 'riglet:tuneMethod';
+	const METHOD_KEY   = 'riglet:tuneMethod';
 	const DURATION_KEY = 'riglet:tuneDuration';
 
 	function loadMethod(): 'builtin' | 'external' {
-		try {
-			const v = localStorage.getItem(METHOD_KEY);
-			return v === 'external' ? 'external' : 'builtin';
-		} catch { return 'builtin'; }
+		try { const v = localStorage.getItem(METHOD_KEY); return v === 'external' ? 'external' : 'builtin'; }
+		catch { return 'builtin'; }
 	}
-
 	function loadDuration(): number {
-		try {
-			const v = localStorage.getItem(DURATION_KEY);
-			const n = v ? parseInt(v, 10) : 5;
-			return [3, 5, 10].includes(n) ? n : 5;
-		} catch { return 5; }
+		try { const v = localStorage.getItem(DURATION_KEY); const n = v ? parseInt(v, 10) : 5; return [3, 5, 10].includes(n) ? n : 5; }
+		catch { return 5; }
 	}
 
 	let tuneMethod: 'builtin' | 'external' = $state(loadMethod());
@@ -35,323 +29,313 @@
 		tuneMethod = m;
 		try { localStorage.setItem(METHOD_KEY, m); } catch { /* ignore */ }
 	}
-
 	function setDuration(d: number) {
 		externalDuration = d;
 		try { localStorage.setItem(DURATION_KEY, String(d)); } catch { /* ignore */ }
 	}
 
-	function swrColor(value: number): string {
-		if (value < 1.5) return '#4caf50';   // green
-		if (value < 2.5) return '#ffc107';   // amber
-		if (value < 3.5) return '#ff9800';   // orange
-		return '#f44336';                     // red
+	function swrColor(v: number): string {
+		if (v < 1.5) return '#4caf50';
+		if (v < 2.5) return '#ffc107';
+		if (v < 3.5) return '#ff9800';
+		return '#f44336';
 	}
 
 	function startTune() {
 		if (ptt || tuning) return;
-		controlWs?.send({
-			type: 'tune_start',
-			method: tuneMethod,
-			duration: externalDuration,
-		});
+		controlWs?.send({ type: 'tune_start', method: tuneMethod, duration: externalDuration });
 	}
-
 	function stopTune() {
 		controlWs?.send({ type: 'tune_stop' });
 	}
-
 	function toggleTuner() {
 		controlWs?.send({ type: tunerEnabled ? 'tuner_disable' : 'tuner_enable' });
 	}
-
 	function onKeydown(e: KeyboardEvent) {
-		if (e.key === 'Escape' && tuning) {
-			e.preventDefault();
-			stopTune();
-		} else if ((e.key === ' ' || e.key === 'Enter') && !tuning) {
-			e.preventDefault();
-			startTune();
-		}
+		if (e.key === 'Escape' && tuning) { e.preventDefault(); stopTune(); }
+		else if ((e.key === ' ' || e.key === 'Enter') && !tuning) { e.preventDefault(); startTune(); }
 	}
 </script>
 
-<div class="tune-wrap">
-	<!-- Main tune button -->
+<div class="tune-col">
+	<span class="col-label">TUNE</span>
+
+	<!-- Main tune trigger -->
 	<button
 		class="tune-btn"
 		class:active={tuning}
-		class:disabled={ptt}
 		onclick={tuning ? stopTune : startTune}
 		onkeydown={onKeydown}
 		disabled={ptt}
-		aria-label={tuning ? 'Tuning in progress — press to abort' : 'Start antenna tune cycle'}
+		aria-label={tuning ? 'Tuning — press to abort' : 'Start tune cycle'}
 		aria-pressed={tuning}
-		title={ptt ? 'Cannot tune while transmitting' : tuning ? 'Click to abort tune' : 'Start tune'}
+		title={ptt ? 'Cannot tune while transmitting' : tuning ? 'Click to abort' : 'Start tune'}
 	>
 		{#if tuning}
 			<span class="spinner" aria-hidden="true"></span>
-			<span class="btn-label">TUNING</span>
 		{:else}
-			<span class="btn-label">TUNE</span>
+			<span class="tune-icon" aria-hidden="true">⟳</span>
 		{/if}
 	</button>
 
-	<!-- Controls row: method + ATU toggle -->
-	<div class="tune-controls">
-		<div class="method-toggle" role="group" aria-label="Tune method">
-			<button
-				class="method-btn"
-				class:active={tuneMethod === 'builtin'}
-				onclick={() => setMethod('builtin')}
-				aria-pressed={tuneMethod === 'builtin'}
-				aria-label="Built-in ATU tune"
-				title="Built-in ATU tune"
-			>INT</button>
-			<button
-				class="method-btn"
-				class:active={tuneMethod === 'external'}
-				onclick={() => setMethod('external')}
-				aria-pressed={tuneMethod === 'external'}
-				aria-label="External tuner via PTT carrier"
-				title="External tuner via PTT carrier"
-			>EXT</button>
-		</div>
+	<!-- ATU enable/disable -->
+	<button
+		class="circle-btn"
+		class:active={tunerEnabled}
+		onclick={toggleTuner}
+		aria-pressed={tunerEnabled}
+		aria-label={tunerEnabled ? 'Disable ATU' : 'Enable ATU'}
+		title={tunerEnabled ? 'ATU enabled' : 'ATU disabled'}
+	>ATU</button>
 
+	<!-- Method: INT / EXT -->
+	<div class="seg-ctrl" role="group" aria-label="Tune method">
 		<button
-			class="atu-btn"
-			class:active={tunerEnabled}
-			onclick={toggleTuner}
-			aria-pressed={tunerEnabled}
-			aria-label={tunerEnabled ? 'Disable ATU' : 'Enable ATU'}
-			title={tunerEnabled ? 'ATU enabled — click to disable' : 'ATU disabled — click to enable'}
-		>ATU</button>
+			class="seg-btn"
+			class:active={tuneMethod === 'builtin'}
+			onclick={() => setMethod('builtin')}
+			aria-pressed={tuneMethod === 'builtin'}
+			title="Built-in ATU tune"
+		>INT</button><button
+			class="seg-btn"
+			class:active={tuneMethod === 'external'}
+			onclick={() => setMethod('external')}
+			aria-pressed={tuneMethod === 'external'}
+			title="External tuner via PTT carrier"
+		>EXT</button>
 	</div>
 
-	<!-- SWR readout: visible during TX or tuning -->
-	{#if tuning || ptt}
-		<div
-			class="swr-readout"
-			style="color: {swrColor(swr)}"
-			aria-label={`SWR ${swr.toFixed(1)} to 1`}
-			aria-live="polite"
-		>
-			{swr.toFixed(1)}:1
-		</div>
-	{/if}
-
-	<!-- Duration selector (external mode only) -->
+	<!-- Duration pills (external mode only) -->
 	{#if tuneMethod === 'external'}
-		<div class="duration-select" role="group" aria-label="Tune duration">
+		<div class="dur-row" role="group" aria-label="Tune duration">
 			{#each [3, 5, 10] as d}
 				<button
 					class="dur-btn"
 					class:active={externalDuration === d}
 					onclick={() => setDuration(d)}
 					aria-pressed={externalDuration === d}
-					aria-label={`${d} second tune duration`}
+					aria-label="{d}s tune duration"
 				>{d}s</button>
 			{/each}
 		</div>
 	{/if}
+
+	<!-- SWR readout: visible during TX or tuning -->
+	{#if tuning || ptt}
+		<div
+			class="swr"
+			style="color: {swrColor(swr)}"
+			aria-label="SWR {swr.toFixed(1)} to 1"
+			aria-live="polite"
+		>{swr.toFixed(1)}:1</div>
+	{:else}
+		<div class="swr swr-idle" aria-hidden="true">–:–</div>
+	{/if}
 </div>
 
 <style>
-	.tune-wrap {
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		gap: 6px;
-	}
-
-	.tune-btn {
-		width: 72px;
-		height: 72px;
-		border-radius: 50%;
-		border: 3px solid #d4a017;
-		background: #1a1a1a;
-		color: #d4a017;
-		font-size: 0.85rem;
-		font-weight: 700;
-		cursor: pointer;
+	.tune-col {
 		display: flex;
 		flex-direction: column;
 		align-items: center;
 		justify-content: center;
-		gap: 3px;
-		transition: background 0.15s, border-color 0.15s, color 0.15s;
-		touch-action: none;
+		gap: 6px;
+		padding: 8px 10px;
+		border-left: 1px solid #222;
+	}
+
+	/* Panel section label — matches TxDspPanel column header convention */
+	.col-label {
+		font-size: 0.55rem;
+		font-family: monospace;
+		font-weight: 700;
+		letter-spacing: 0.12em;
+		color: #444;
+		text-transform: uppercase;
 		user-select: none;
-		letter-spacing: 0.06em;
 	}
 
-	.tune-btn:hover:not(.active):not(.disabled):not(:disabled) {
-		border-color: #f0c040;
-		color: #f0c040;
-		background: #1e1a00;
+	/* ── Tune trigger button — amber, larger than circle-btn ── */
+	.tune-btn {
+		width: 52px;
+		height: 52px;
+		border-radius: 50%;
+		border: 1px solid #5a4000;
+		background: #252010;
+		color: #a07010;
+		font-size: 1.1rem;
+		cursor: pointer;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		flex-shrink: 0;
+		transition: background 0.12s, border-color 0.12s, color 0.12s, box-shadow 0.12s;
+		user-select: none;
 	}
 
-	.tune-btn:focus-visible {
-		outline: 3px solid #4a9eff;
-		outline-offset: 3px;
+	.tune-btn:hover:not(:disabled):not(.active) {
+		border-color: #c08820;
+		color: #d4a020;
+		background: #2a2008;
 	}
 
 	.tune-btn.active {
-		background: #3a2800;
-		border-color: #f0c040;
+		border-color: #d4a020;
+		background: #2a1e00;
 		color: #f0c040;
-		box-shadow: 0 0 14px rgba(212, 160, 23, 0.5);
-		animation: tune-pulse 1s ease-in-out infinite alternate;
+		box-shadow: 0 0 10px rgba(212, 160, 32, 0.45);
+		animation: tune-pulse 1.1s ease-in-out infinite alternate;
 	}
 
-	.tune-btn.disabled,
 	.tune-btn:disabled {
-		opacity: 0.35;
+		opacity: 0.3;
 		cursor: not-allowed;
-		pointer-events: none;
 	}
 
-	.btn-label {
-		font-size: 0.8rem;
-		font-weight: 700;
-		letter-spacing: 0.08em;
+	.tune-btn:focus-visible {
+		outline: 2px solid #4a9eff;
+		outline-offset: 3px;
 	}
 
-	/* Spinner ring */
-	.spinner {
-		width: 14px;
-		height: 14px;
-		border: 2px solid rgba(240, 192, 64, 0.3);
-		border-top-color: #f0c040;
+	.tune-icon {
+		font-size: 1.3rem;
+		line-height: 1;
+	}
+
+	/* ── Shared small circle button (ATU) ── */
+	.circle-btn {
+		width: 36px;
+		height: 36px;
 		border-radius: 50%;
-		animation: spin 0.8s linear infinite;
-		flex-shrink: 0;
-	}
-
-	@keyframes spin {
-		to { transform: rotate(360deg); }
-	}
-
-	@keyframes tune-pulse {
-		from { box-shadow: 0 0 8px rgba(212, 160, 23, 0.4); }
-		to   { box-shadow: 0 0 20px rgba(212, 160, 23, 0.7); }
-	}
-
-	/* Controls row */
-	.tune-controls {
+		border: 1px solid #3a3a3a;
+		background: #252525;
+		color: #777;
+		font-size: 0.58rem;
+		font-weight: 700;
+		letter-spacing: 0.04em;
+		cursor: pointer;
 		display: flex;
 		align-items: center;
-		gap: 6px;
-	}
-
-	/* Method toggle pills */
-	.method-toggle {
-		display: flex;
-		border-radius: 4px;
-		overflow: hidden;
-		border: 1px solid #444;
-	}
-
-	.method-btn {
-		padding: 2px 6px;
-		font-size: 0.65rem;
-		font-weight: 700;
-		background: #111;
-		border: none;
-		color: #666;
-		cursor: pointer;
-		letter-spacing: 0.04em;
-		transition: background 0.1s, color 0.1s;
-	}
-
-	.method-btn + .method-btn {
-		border-left: 1px solid #444;
-	}
-
-	.method-btn.active {
-		background: #1a2a1a;
-		color: #4caf50;
-	}
-
-	.method-btn:focus-visible {
-		outline: 2px solid #4a9eff;
-		outline-offset: 1px;
-	}
-
-	/* ATU toggle */
-	.atu-btn {
-		padding: 3px 8px;
-		font-size: 0.7rem;
-		font-weight: 700;
-		background: #1a1a1a;
-		border: 1px solid #444;
-		border-radius: 4px;
-		color: #666;
-		cursor: pointer;
-		letter-spacing: 0.06em;
+		justify-content: center;
+		flex-shrink: 0;
 		transition: background 0.1s, border-color 0.1s, color 0.1s;
 	}
 
-	.atu-btn:hover:not(.active) {
-		border-color: #666;
-		color: #aaa;
+	.circle-btn:hover:not(.active) {
+		border-color: #555;
+		background: #2e2e2e;
+		color: #ccc;
 	}
 
-	.atu-btn.active {
-		background: #1b3a1b;
-		border-color: #4caf50;
-		color: #4caf50;
+	.circle-btn.active {
+		background: #0284c7;
+		border-color: #0ea5e9;
+		color: #fff;
 	}
 
-	.atu-btn:focus-visible {
+	.circle-btn:focus-visible {
 		outline: 2px solid #4a9eff;
 		outline-offset: 2px;
 	}
 
-	/* SWR readout */
-	.swr-readout {
-		font-family: monospace;
-		font-size: 0.82rem;
-		font-weight: 700;
-		letter-spacing: 0.04em;
-		transition: color 0.2s;
+	/* ── Segmented INT/EXT control ── */
+	.seg-ctrl {
+		display: flex;
+		border-radius: 3px;
+		overflow: hidden;
+		border: 1px solid #333;
 	}
 
-	/* Duration selector */
-	.duration-select {
+	.seg-btn {
+		padding: 2px 5px;
+		font-size: 0.58rem;
+		font-weight: 700;
+		letter-spacing: 0.04em;
+		background: #1a1a1a;
+		border: none;
+		color: #555;
+		cursor: pointer;
+		transition: background 0.1s, color 0.1s;
+	}
+
+	.seg-btn + .seg-btn {
+		border-left: 1px solid #333;
+	}
+
+	.seg-btn.active {
+		background: #1a2a1a;
+		color: #4caf50;
+	}
+
+	.seg-btn:focus-visible {
+		outline: 1px solid #4a9eff;
+		outline-offset: 1px;
+	}
+
+	/* ── Duration pills ── */
+	.dur-row {
 		display: flex;
-		gap: 3px;
+		gap: 2px;
 	}
 
 	.dur-btn {
-		padding: 2px 6px;
-		font-size: 0.65rem;
+		padding: 2px 5px;
+		font-size: 0.58rem;
 		font-weight: 700;
-		background: #111;
-		border: 1px solid #444;
+		background: #1a1a1a;
+		border: 1px solid #333;
 		border-radius: 3px;
-		color: #666;
+		color: #555;
 		cursor: pointer;
 		transition: background 0.1s, color 0.1s, border-color 0.1s;
 	}
 
 	.dur-btn.active {
-		background: #1a2a3a;
+		background: #1a2030;
 		border-color: #4a9eff;
 		color: #4a9eff;
 	}
 
 	.dur-btn:focus-visible {
-		outline: 2px solid #4a9eff;
+		outline: 1px solid #4a9eff;
 		outline-offset: 1px;
 	}
 
+	/* ── SWR readout ── */
+	.swr {
+		font-family: monospace;
+		font-size: 0.72rem;
+		font-weight: 700;
+		letter-spacing: 0.04em;
+		transition: color 0.2s;
+	}
+
+	.swr-idle {
+		color: #333;
+	}
+
+	/* ── Animations ── */
+	@keyframes tune-pulse {
+		from { box-shadow: 0 0 6px rgba(212, 160, 32, 0.35); }
+		to   { box-shadow: 0 0 16px rgba(212, 160, 32, 0.65); }
+	}
+
 	@media (prefers-reduced-motion: reduce) {
-		.tune-btn.active {
-			animation: none;
-		}
-		.spinner {
-			animation: none;
-		}
+		.tune-btn.active { animation: none; }
+		.spinner { animation: none; }
+	}
+
+	/* Spinner for active tuning state */
+	.spinner {
+		width: 16px;
+		height: 16px;
+		border: 2px solid rgba(240, 192, 64, 0.25);
+		border-top-color: #f0c040;
+		border-radius: 50%;
+		animation: spin 0.7s linear infinite;
+	}
+
+	@keyframes spin {
+		to { transform: rotate(360deg); }
 	}
 </style>
