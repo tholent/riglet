@@ -81,6 +81,17 @@ class RadioInstance:
         self.rf_gain: int = 50
         self.squelch: int = 0
 
+        # Tuner state
+        self.tuning: bool = False
+        self.tuner_enabled: bool = False
+        self._tune_task: asyncio.Task[None] | None = None
+        self._tune_swr_count: int = 0  # consecutive polls with SWR < 2.0
+        self._tune_poll_count: int = 0  # poll cycles since tuning started
+
+        # Capability caches (None = unknown, True/False = tested)
+        self._supports_vfo_op_tune: bool | None = None
+        self._supports_tuner_func: bool | None = None
+
         # WebSocket channels (set externally by router handlers)
         self.ws_control: WebSocket | None = None
         self.ws_audio: WebSocket | None = None
@@ -294,6 +305,8 @@ class RadioInstance:
 
     async def set_ptt(self, active: bool) -> None:
         """Set PTT state.  True = transmit, False = receive."""
+        if active and self.tuning:
+            raise RigctldError(-9, "Cannot engage PTT while tuning")
         if self.simulation:
             self.ptt = active
             return
@@ -432,6 +445,169 @@ class RadioInstance:
         await self.send_command(rf"+\set_level SQL {level / 100.0:.2f}")
         self.squelch = level
 
+    async def vfo_op_tune(self) -> None:
+        """Start a built-in ATU tune cycle via Hamlib vfo_op TUNE."""
+        if self.ptt:
+            raise RigctldError(-9, "Cannot tune while PTT is active")
+        if self._supports_vfo_op_tune is False:
+            raise RigctldError(-11, "Built-in tune not supported by this radio")
+
+        self.tuning = True
+        self._tune_swr_count = 0
+
+        if self.simulation:
+            async def _sim_tune() -> None:
+                swr_steps = [3.5, 2.8, 2.1, 1.6, 1.2]
+                for swr_val in swr_steps:
+                    await asyncio.sleep(0.4)
+                    self.swr = swr_val
+                self.tuning = False
+                if self.ws_control is not None:
+                    with contextlib.suppress(Exception):
+                        await self.ws_control.send_json(
+                            {"type": "tune_complete", "success": True, "final_swr": self.swr}
+                        )
+                self._tune_task = None
+
+            self._tune_task = asyncio.create_task(_sim_tune(), name=f"tune-{self.id}")
+            return
+
+        try:
+            await self.send_command(r"+\vfo_op TUNE")
+            self._supports_vfo_op_tune = True
+        except RigctldError as exc:
+            if exc.code in (-4, -11):
+                self._supports_vfo_op_tune = False
+            self.tuning = False
+            raise
+
+        # Schedule timeout task: if tune hasn't converged in 10s, declare failure
+        async def _tune_timeout() -> None:
+            await asyncio.sleep(10.0)
+            if self.tuning:
+                self.tuning = False
+                if self.ws_control is not None:
+                    with contextlib.suppress(Exception):
+                        await self.ws_control.send_json(
+                            {"type": "tune_complete", "success": False, "final_swr": self.swr}
+                        )
+            self._tune_task = None
+
+        self._tune_task = asyncio.create_task(_tune_timeout(), name=f"tune-timeout-{self.id}")
+
+    async def set_tuner_func(self, enabled: bool) -> None:
+        """Enable or disable the ATU via Hamlib set_func TUNER."""
+        if self._supports_tuner_func is False:
+            raise RigctldError(-11, "ATU toggle not supported by this radio")
+        if self.simulation:
+            self.tuner_enabled = enabled
+            return
+        val = 1 if enabled else 0
+        try:
+            await self.send_command(rf"+\set_func TUNER {val}")
+            self._supports_tuner_func = True
+            self.tuner_enabled = enabled
+        except RigctldError as exc:
+            if exc.code in (-4, -11):
+                self._supports_tuner_func = False
+            raise
+
+    async def get_tuner_func(self) -> bool:
+        """Query ATU state via Hamlib get_func TUNER.  Falls back to stored value on error."""
+        if self.simulation:
+            return self.tuner_enabled
+        try:
+            raw = await self.send_command(r"+\get_func TUNER")
+            for line in raw.splitlines():
+                stripped = line.strip()
+                if stripped in ("0", "1"):
+                    return stripped == "1"
+            return self.tuner_enabled
+        except RigctldError:
+            return self.tuner_enabled
+
+    async def external_tune(self, duration_s: float = 5.0) -> None:
+        """Start an external tune cycle: key PTT for duration_s seconds."""
+        duration_s = max(1.0, min(15.0, duration_s))
+        if self.ptt:
+            raise RigctldError(-9, "Cannot tune while PTT is active")
+        if self.tuning:
+            raise RigctldError(-9, "Tune cycle already in progress")
+
+        self.tuning = True
+        self._tune_swr_count = 0
+
+        # Key PTT immediately so callers see ptt=True before the task runs.
+        # For real hardware the key command is sent inside _external_tune_loop.
+        if self.simulation:
+            self.ptt = True
+
+        self._tune_task = asyncio.create_task(
+            self._external_tune_loop(duration_s), name=f"ext-tune-{self.id}"
+        )
+
+    async def _external_tune_loop(self, duration_s: float) -> None:
+        """Carrier loop for external tune: keys PTT, holds, then unkeys."""
+        try:
+            # Key PTT directly (bypass interlock — we own tuning=True).
+            # Simulation already set ptt=True in external_tune(); real hardware keys here.
+            if not self.simulation:
+                await self.send_command(r"+\set_ptt 1")
+                self.ptt = True
+
+            elapsed = 0.0
+            step = 0.5
+            swr_start = 3.5
+            swr_end = 1.2
+            steps_total = max(1, round(duration_s / step))
+            step_idx = 0
+
+            while elapsed < duration_s:
+                # Safety: abort if WS disconnects (prevents stuck transmitter).
+                # In simulation mode ws_control is legitimately None; only apply
+                # this check for real hardware where a stuck transmitter is dangerous.
+                if not self.simulation and self.ws_control is None:
+                    break
+                await asyncio.sleep(step)
+                elapsed += step
+                step_idx += 1
+                # Linearly interpolate SWR down in simulation
+                if self.simulation:
+                    t = min(1.0, step_idx / steps_total)
+                    self.swr = round(swr_start + t * (swr_end - swr_start), 2)
+
+        finally:
+            # Always unkey
+            if self.simulation:
+                self.ptt = False
+            else:
+                with contextlib.suppress(Exception):
+                    await self.send_command(r"+\set_ptt 0")
+                self.ptt = False
+            self.tuning = False
+            self._tune_task = None
+            if self.ws_control is not None:
+                with contextlib.suppress(Exception):
+                    await self.ws_control.send_json(
+                        {
+                            "type": "tune_complete",
+                            "success": self.swr < 2.0,
+                            "final_swr": self.swr,
+                        }
+                    )
+
+    async def stop_tune(self) -> None:
+        """Abort any in-progress tune cycle."""
+        if self._tune_task is not None and not self._tune_task.done():
+            self._tune_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await self._tune_task
+        self._tune_task = None
+        if self.tuning:
+            self.tuning = False
+        if self.ptt:
+            await self.set_ptt(False)
+
     async def get_smeter(self) -> tuple[int, int, int]:
         """Return S-meter reading as (S-units 0-9, dB_over_s9, raw_dBm).
 
@@ -481,15 +657,52 @@ class RadioInstance:
         changed["smeter_db_over"] = new_db_over
         changed["smeter_dbm"] = new_dbm
 
-        # Query SWR only during TX to avoid spurious readings
-        if self.ptt:
+        # Query SWR during TX or built-in tune cycles
+        if self.ptt or self.tuning:
             try:
                 new_swr = await self.get_swr()
-                if new_swr != self.swr:
+                # Always broadcast SWR while tuning for smooth real-time updates
+                if self.tuning or new_swr != self.swr:
                     changed["swr"] = new_swr
                     self.swr = new_swr
+
+                # Tune completion detection (built-in tune: poll converges SWR)
+                if self.tuning:
+                    if new_swr < 2.0:
+                        self._tune_swr_count += 1
+                    else:
+                        self._tune_swr_count = 0
+                    if self._tune_swr_count >= 3:
+                        # Cancel the timeout task (if any)
+                        if self._tune_task is not None and not self._tune_task.done():
+                            self._tune_task.cancel()
+                            with contextlib.suppress(asyncio.CancelledError):
+                                await self._tune_task
+                        self._tune_task = None
+                        self.tuning = False
+                        changed["tuning"] = False
+                        if self.ws_control is not None:
+                            with contextlib.suppress(Exception):
+                                await self.ws_control.send_json(
+                                    {
+                                        "type": "tune_complete",
+                                        "success": True,
+                                        "final_swr": new_swr,
+                                    }
+                                )
             except RigctldError:
                 pass  # SWR not supported by all rigs — silently skip
+
+        # Periodically poll ATU state (every 5th cycle)
+        self._tune_poll_count += 1
+        if self._tune_poll_count % 5 == 0:
+            try:
+                new_tuner = await self.get_tuner_func()
+                if new_tuner != self.tuner_enabled:
+                    self.tuner_enabled = new_tuner
+                    changed["tuner_enabled"] = new_tuner
+            except Exception:
+                pass
 
         return changed
 
@@ -623,6 +836,8 @@ class RadioManager:
                 "ctcss_tone": inst.ctcss_tone,
                 "rf_gain": inst.rf_gain,
                 "squelch": inst.squelch,
+                "tuning": inst.tuning,
+                "tuner_enabled": inst.tuner_enabled,
             }
             for inst in self.radios.values()
         ]

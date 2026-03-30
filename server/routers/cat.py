@@ -47,6 +47,15 @@ class CtcssRequest(BaseModel):
     tone: float
 
 
+class TuneRequest(BaseModel):
+    method: Literal["builtin", "external"] = "builtin"
+    duration: float = 5.0
+
+
+class TunerRequest(BaseModel):
+    enabled: bool
+
+
 _VFO_ALLOWLIST: frozenset[str] = frozenset({"vfoa", "vfob", "main", "sub"})
 
 
@@ -187,6 +196,53 @@ async def test_connection(radio: RadioDep) -> JSONResponse:
         return JSONResponse(content={"success": False, "error": str(exc)})
 
 
+@router.post("/radio/{radio_id}/cat/tune")
+async def start_tune(body: TuneRequest, radio: RadioDep) -> JSONResponse:
+    try:
+        if body.method == "builtin":
+            await radio.vfo_op_tune()
+        else:
+            await radio.external_tune(body.duration)
+        return JSONResponse(content={"tuning": radio.tuning})
+    except RigctldError as exc:
+        return JSONResponse(status_code=503, content={"error": str(exc)})
+    except Exception as exc:
+        logger.error("start_tune failed for %s: %s", radio.config.id, exc)
+        return JSONResponse(status_code=503, content={"error": "Radio unavailable"})
+
+
+@router.post("/radio/{radio_id}/cat/tune/stop")
+async def stop_tune(radio: RadioDep) -> JSONResponse:
+    try:
+        await radio.stop_tune()
+        return JSONResponse(content={"tuning": radio.tuning})
+    except Exception as exc:
+        logger.error("stop_tune failed for %s: %s", radio.config.id, exc)
+        return JSONResponse(status_code=503, content={"error": "Radio unavailable"})
+
+
+@router.get("/radio/{radio_id}/cat/tuner")
+async def get_tuner(radio: RadioDep) -> JSONResponse:
+    try:
+        enabled = await radio.get_tuner_func()
+        return JSONResponse(content={"enabled": enabled})
+    except Exception as exc:
+        logger.error("get_tuner failed for %s: %s", radio.config.id, exc)
+        return JSONResponse(status_code=503, content={"error": "Radio unavailable"})
+
+
+@router.post("/radio/{radio_id}/cat/tuner")
+async def set_tuner(body: TunerRequest, radio: RadioDep) -> JSONResponse:
+    try:
+        await radio.set_tuner_func(body.enabled)
+        return JSONResponse(content={"enabled": radio.tuner_enabled})
+    except RigctldError as exc:
+        return JSONResponse(status_code=503, content={"error": str(exc)})
+    except Exception as exc:
+        logger.error("set_tuner failed for %s: %s", radio.config.id, exc)
+        return JSONResponse(status_code=503, content={"error": "Radio unavailable"})
+
+
 # ---------------------------------------------------------------------------
 # Control WebSocket
 # ---------------------------------------------------------------------------
@@ -221,6 +277,9 @@ async def ws_control(websocket: WebSocket, radio_id: str) -> None:
             "online": radio.online,
             "rf_gain": radio.rf_gain,
             "squelch": radio.squelch,
+            "tuning": radio.tuning,
+            "tuner_enabled": radio.tuner_enabled,
+            "swr": radio.swr,
         }
     )
 
@@ -268,6 +327,40 @@ async def ws_control(websocket: WebSocket, radio_id: str) -> None:
                 elif msg_type == "squelch":
                     await radio.set_squelch(int(msg["level"]))
                     await websocket.send_json({"type": "state", "squelch": radio.squelch})
+                elif msg_type == "tune_start":
+                    method = str(msg.get("method", "builtin"))
+                    if method == "builtin":
+                        await radio.vfo_op_tune()
+                        await websocket.send_json({"type": "state", "tuning": radio.tuning})
+                    elif method == "external":
+                        duration = float(msg.get("duration", 5.0))
+                        await radio.external_tune(duration)
+                        await websocket.send_json(
+                            {"type": "state", "tuning": radio.tuning, "ptt": radio.ptt}
+                        )
+                    else:
+                        await websocket.send_json(
+                            {
+                                "type": "error",
+                                "code": "invalid_method",
+                                "message": f"Unknown tune method: {method!r}",
+                            }
+                        )
+                elif msg_type == "tune_stop":
+                    await radio.stop_tune()
+                    await websocket.send_json(
+                        {"type": "state", "tuning": radio.tuning, "ptt": radio.ptt}
+                    )
+                elif msg_type == "tuner_enable":
+                    await radio.set_tuner_func(True)
+                    await websocket.send_json(
+                        {"type": "state", "tuner_enabled": radio.tuner_enabled}
+                    )
+                elif msg_type == "tuner_disable":
+                    await radio.set_tuner_func(False)
+                    await websocket.send_json(
+                        {"type": "state", "tuner_enabled": radio.tuner_enabled}
+                    )
                 else:
                     await websocket.send_json(
                         {

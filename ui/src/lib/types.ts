@@ -46,6 +46,8 @@ export interface RadioState {
 	ctcss_tone?: number;
 	rf_gain?: number;
 	squelch?: number;
+	tuning?: boolean;
+	tuner_enabled?: boolean;
 }
 
 export interface SerialDevice {

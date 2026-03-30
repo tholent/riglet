@@ -40,6 +40,8 @@
 		vfo: 'VFOA',
 		swr: 1.0,
 		ctcss_tone: 0,
+		tuning: false,
+		tuner_enabled: false,
 	});
 	let rxVolume = $state(50);
 	let txGain = $state(50);
@@ -182,6 +184,8 @@
 		if (m.ctcss_tone !== undefined) radio = { ...radio, ctcss_tone: m.ctcss_tone as number };
 		if (m.rf_gain !== undefined) radio = { ...radio, rf_gain: m.rf_gain as number };
 		if (m.squelch !== undefined) radio = { ...radio, squelch: m.squelch as number };
+		if (m.tuning !== undefined) radio = { ...radio, tuning: m.tuning as boolean };
+		if (m.tuner_enabled !== undefined) radio = { ...radio, tuner_enabled: m.tuner_enabled as boolean };
 		radioState.set(radio);
 	}
 
@@ -441,6 +445,9 @@
 						txPcm={txPcm}
 						{onTxGainChange}
 						onTxDspChange={handleTxDspChange}
+						tuning={radio.tuning ?? false}
+						tunerEnabled={radio.tuner_enabled ?? false}
+						swr={radio.swr ?? 1.0}
 					/>
 				</div>
 			{:else}

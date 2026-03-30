@@ -858,3 +858,288 @@ Issues identified by audit (2026-03-29) that are understood and tracked for reso
 ### Code Quality
 
 - **SSH password auth enabled in deployment script**: `deployment/scripts/01-configure.sh` enables SSH password authentication. Key-based-only auth would be more appropriate for a headless embedded device. This is a deployment configuration issue, not a code issue.
+
+---
+
+## v0.6.0 -- Antenna Tuner Control
+
+### Problem Statement
+
+Many amateur radios have a built-in automatic antenna tuner (ATU), and many operators use external antenna tuners. Currently, Riglet provides no way to initiate a tune cycle or control the ATU state from the browser. The operator must physically interact with the radio to tune, which defeats the purpose of remote operation. Riglet needs to support both built-in ATU control (via Hamlib) and an external tuner workflow (key carrier, wait, unkey).
+
+### Goals
+
+1. **One-shot tune cycle**: Send Hamlib `\vfo_op TUNE` to initiate the radio's built-in ATU tune sequence
+2. **ATU on/off toggle**: Send Hamlib `\set_func TUNER 1/0` to enable or disable the built-in ATU
+3. **External tuner workflow**: Key PTT, hold carrier for a configurable duration, then unkey -- for operators using external (non-Hamlib) tuners
+4. **Live SWR feedback**: Display SWR readings during the tune cycle so the operator can see the tuner converging
+5. **Safety interlock**: Tune button is disabled while PTT is active (and vice versa during a tune cycle) to prevent conflicts
+
+### Architecture
+
+#### Backend: New Hamlib Commands in `state.py`
+
+Two new high-level methods on `RadioInstance`, following the existing patterns (`set_ptt`, `set_freq`, etc.):
+
+**`vfo_op_tune()`** -- Initiates a one-shot tune cycle:
+
+```python
+async def vfo_op_tune(self) -> None:
+    """Initiate the radio's built-in ATU tune cycle via vfo_op TUNE.
+
+    This is a fire-and-forget command. The radio handles the tune cycle
+    internally. The backend monitors SWR via the poll loop during tuning.
+    In simulation mode, sets self.tuning = True and schedules a delayed
+    self.tuning = False after 2 seconds.
+
+    Raises RigctldError if the radio does not support VFO_OP TUNE (-4 or -11).
+    """
+```
+
+The Hamlib extended protocol command is `+\vfo_op TUNE`. This tells the radio to key its internal ATU and begin a match cycle. The radio manages the carrier and tune duration internally -- the backend does not need to hold PTT. Most Icom, Yaesu, and Kenwood radios with built-in ATUs support this.
+
+**`set_tuner_func(enabled: bool)`** -- Toggles the ATU on or off:
+
+```python
+async def set_tuner_func(self, enabled: bool) -> None:
+    """Enable or disable the radio's built-in ATU via set_func TUNER.
+
+    When enabled (1), the ATU is active and will auto-tune on band change.
+    When disabled (0), the ATU is bypassed.
+    """
+```
+
+The Hamlib extended protocol command is `+\set_func TUNER 1` or `+\set_func TUNER 0`.
+
+**`get_tuner_func()`** -- Queries ATU state:
+
+```python
+async def get_tuner_func(self) -> bool:
+    """Query whether the built-in ATU is enabled. Returns True if active."""
+```
+
+The Hamlib extended protocol command is `+\get_func TUNER`. Returns `0` or `1`.
+
+**External tuner workflow** -- a timed carrier hold managed server-side:
+
+```python
+async def external_tune(self, duration_s: float = 5.0) -> None:
+    """Key PTT, hold carrier for `duration_s` seconds, then unkey.
+
+    Used for external tuners that require a carrier to tune against.
+    Duration is clamped to 1-15 seconds.
+
+    This is run as a background task. The tune_active flag prevents
+    PTT or tune overlap. If the control WS disconnects during tuning,
+    the carrier is unkeyed immediately (safety).
+    """
+```
+
+This method keys PTT via `set_ptt(True)`, sleeps for the configured duration, then calls `set_ptt(False)`. It runs as an asyncio task so it does not block the WebSocket handler. The `tuning` state flag prevents overlapping operations.
+
+#### New State Fields on `RadioInstance`
+
+```python
+# Tuner state
+self.tuning: bool = False           # True while a tune cycle is in progress
+self.tuner_enabled: bool = False    # ATU on/off state
+self._tune_task: asyncio.Task | None = None  # background task for external tune
+```
+
+The `tuning` flag is set to `True` when either `vfo_op_tune()` or `external_tune()` is called, and reset to `False` when the cycle completes. For `vfo_op TUNE`, the backend cannot know when the radio's internal tune cycle finishes (Hamlib does not provide a callback), so `tuning` is reset after a timeout (configurable, default 10 seconds) or when SWR drops below a threshold (e.g., 2.0:1) for 3 consecutive polls, whichever comes first.
+
+#### Poll Loop Changes
+
+The poll loop (`poll_once()`) already queries SWR when PTT is active. It needs two additions:
+
+1. **Also query SWR when `self.tuning` is True** -- because `vfo_op TUNE` causes the radio to transmit internally (PTT may or may not reflect this depending on the radio/Hamlib model).
+2. **Query tuner status**: Optionally poll `get_func TUNER` to detect if the ATU was toggled from the radio's front panel. This is a low-priority poll (every 5th cycle or so) to avoid overhead.
+3. **Detect tune completion**: When `self.tuning` is True and SWR has settled below 2.0:1 for 3 consecutive polls (or the tune timeout expires), set `self.tuning = False` and push a `tune_complete` event to `ws_control`.
+
+The SWR change during tuning is pushed to the control WS on every poll cycle (not just on change), giving the UI a smooth real-time SWR trace.
+
+#### WebSocket Message Types
+
+New messages on the control WebSocket:
+
+**Client to server (commands):**
+
+| Message | Fields | Description |
+|---------|--------|-------------|
+| `tune_start` | `{ type: "tune_start", method: "builtin" \| "external", duration?: number }` | Start a tune cycle. `method: "builtin"` sends `\vfo_op TUNE`. `method: "external"` keys carrier for `duration` seconds (default 5, range 1-15). |
+| `tune_stop` | `{ type: "tune_stop" }` | Abort an in-progress tune cycle. For external tune, unkeys PTT immediately. For built-in, sends `\vfo_op TUNE` again (some radios toggle) or is a no-op if the radio handles it internally. |
+| `tuner_enable` | `{ type: "tuner_enable" }` | Enable ATU (`\set_func TUNER 1`). |
+| `tuner_disable` | `{ type: "tuner_disable" }` | Disable ATU (`\set_func TUNER 0`). |
+
+**Server to client (state pushes):**
+
+| Message | Fields | Description |
+|---------|--------|-------------|
+| `state` | `{ type: "state", tuning: bool, tuner_enabled: bool, swr: float }` | Normal state push, extended with tuner fields. |
+| `tune_complete` | `{ type: "tune_complete", success: bool, final_swr: float }` | Sent when a tune cycle finishes. `success` is True if final SWR is below 2.0:1. |
+| `error` | `{ type: "error", code: "tune_not_supported" \| "tuner_not_supported", message: string }` | Sent if the radio does not support the requested tuner operation. |
+
+#### REST Endpoints (Optional, for Completeness)
+
+Following the existing REST+WS duality pattern:
+
+- `POST /api/radio/{id}/cat/tune` -- body: `{ method: "builtin" | "external", duration?: number }`
+- `POST /api/radio/{id}/cat/tune/stop` -- abort tune
+- `POST /api/radio/{id}/cat/tuner` -- body: `{ enabled: boolean }`
+- `GET /api/radio/{id}/cat/tuner` -- returns `{ enabled: boolean }`
+
+#### Graceful Degradation
+
+Not all radios support `vfo_op TUNE` or `set_func TUNER`. The backend handles this:
+
+1. On first attempt, if rigctld returns RPRT -4 ("Feature not implemented") or RPRT -11 ("Feature not available"), the backend catches the `RigctldError` and sends an error message to the control WS.
+2. The frontend uses this to disable the unsupported button and show a tooltip: "Built-in ATU not supported by this radio" or "ATU toggle not supported."
+3. A `capabilities` object could be added to the initial state snapshot to advertise support, but the simpler approach is to try-and-fail on first use and then cache the result:
+
+```python
+# On RadioInstance
+self._supports_vfo_op_tune: bool | None = None  # None = unknown, try once
+self._supports_tuner_func: bool | None = None
+```
+
+After the first attempt, the result is cached. Subsequent requests for an unsupported feature return the cached error immediately without hitting rigctld.
+
+4. **External tune always works** -- it is just PTT + timer, requiring no special Hamlib support. This is the universal fallback.
+
+#### Safety Interlocks
+
+- **Tune while PTT active**: Rejected. The WS handler checks `self.ptt` before starting a tune cycle and sends an error: `"Cannot tune while PTT is active"`.
+- **PTT while tuning**: Rejected. The WS handler checks `self.tuning` before engaging PTT and sends an error: `"Cannot engage PTT while tuning"`. The `set_ptt` method is updated to check `self.tuning`.
+- **External tune safety**: If the control WS disconnects while an external tune carrier is active, the background task detects this and calls `set_ptt(False)` immediately. An `asyncio.Event` or periodic check in the sleep loop handles this.
+- **Tune timeout**: External tune is hard-capped at 15 seconds. Built-in tune timeout is 10 seconds. These prevent a stuck tune cycle from holding the transmitter indefinitely.
+
+#### Simulation Mode
+
+In simulation mode:
+- `vfo_op_tune()` sets `self.tuning = True`, schedules a 2-second delayed reset, and simulates SWR decreasing from ~3.5 to ~1.2 over the interval.
+- `set_tuner_func()` sets `self.tuner_enabled` and returns.
+- `external_tune()` sets `self.tuning = True` and `self.ptt = True`, sleeps for the duration, then resets both. Simulated SWR decreases during the hold.
+
+### Frontend
+
+#### New Component: `TuneButton.svelte`
+
+A dedicated tune control component placed next to the PTT button inside the existing `PttPanel.svelte` layout. It contains:
+
+1. **Tune button** -- the primary action button, similar in size/shape to the PTT button but distinguished by color (amber/gold vs. PTT red). States:
+   - **Idle**: Dark background, "TUNE" label, amber border.
+   - **Tuning (built-in)**: Animated amber glow/pulse, "TUNING" label, SWR readout appears below.
+   - **Tuning (external)**: Same as above but with a countdown timer showing seconds remaining.
+   - **Disabled**: Greyed out when PTT is active. Tooltip: "Release PTT to tune."
+   - **Unsupported**: Hidden or greyed with tooltip when both built-in tune and ATU toggle are unsupported by the radio (external tune always available).
+   - **Error**: Brief red flash with error message (e.g., "Tune failed").
+
+2. **ATU toggle** -- a small pill/toggle below the tune button (same visual pattern as the VOX toggle below PTT):
+   - Shows "ATU" label.
+   - Green when enabled, dim when disabled.
+   - Click toggles `tuner_enable`/`tuner_disable`.
+   - Greyed out with tooltip if `set_func TUNER` is not supported.
+
+3. **Method selector** -- a small toggle or dropdown to select between "Built-in" and "External" tune methods. Defaults to "Built-in" if supported, otherwise "External". Persisted in localStorage.
+
+4. **SWR readout** -- displayed below the tune button during tuning (and optionally at all times during TX). Shows the numeric SWR value (e.g., "1.5:1") with color coding:
+   - Green: SWR < 1.5
+   - Yellow: 1.5 <= SWR < 2.5
+   - Orange: 2.5 <= SWR < 3.5
+   - Red: SWR >= 3.5
+
+5. **External tune duration** -- when "External" method is selected, a small numeric control (or presets: 3s / 5s / 10s) sets the carrier hold duration.
+
+#### Component Props
+
+```typescript
+interface Props {
+    ptt: boolean;
+    tuning: boolean;
+    tunerEnabled: boolean;
+    swr: number;
+    controlWs: ControlWebSocket | null;
+}
+```
+
+The `tuning`, `tunerEnabled`, and `swr` values come from the control WS state messages, tracked in the same `radio` state object as `ptt`, `freq`, `mode`, etc.
+
+#### Integration into PttPanel.svelte
+
+The `TuneButton` is added as a new column in the `PttPanel` flex layout, between the PTT button and the TX DSP panel:
+
+```
+[ LUFS? ] [ PTT button ] [ TUNE button + ATU toggle + SWR ] [ TX DSP panel ] [ LUFS? ]
+```
+
+The PttPanel already has a flex row layout with distinct sections. The tune controls form a new `ptt-tune` section with a vertical stack:
+
+```svelte
+<div class="ptt-tune">
+    <TuneButton {ptt} {tuning} {tunerEnabled} {swr} {controlWs} />
+</div>
+```
+
+#### State Integration in +page.svelte
+
+The main page's radio state object is extended:
+
+```typescript
+radio = {
+    ...radio,
+    tuning: false,
+    tuner_enabled: false,
+    // swr already exists
+};
+```
+
+The control WS `onmessage` handler already processes `state` messages and merges fields. The new `tuning` and `tuner_enabled` fields flow through automatically. A handler for `tune_complete` messages triggers a brief visual confirmation (green flash on the tune button, or a toast notification).
+
+#### Keyboard Accessibility
+
+- Tune button: `Enter`/`Space` to start tune, `Escape` to abort.
+- ATU toggle: `Enter`/`Space` to toggle.
+- Method selector: Arrow keys to cycle.
+- All controls have ARIA labels describing current state.
+
+### Config Schema
+
+No new config fields are strictly required -- tuner control is a runtime operation, not a persisted setting. However, two optional fields could be added to `RadioConfig` for operator convenience:
+
+```python
+# In RadioConfig
+external_tune_duration_s: float = 5.0   # default duration for external tune carrier
+```
+
+The `external_tune_duration_s` default is persisted per-radio so operators with external tuners do not need to set the duration every session. The frontend's method selection (built-in vs. external) is stored in localStorage since it is a UI preference, not a radio configuration.
+
+### Trade-offs and Decisions
+
+| Decision | Rationale |
+|----------|-----------|
+| Tune cycle detection via SWR polling + timeout | Hamlib has no "tune complete" callback. Polling SWR and detecting convergence is the best available heuristic. The timeout is a safety net. |
+| External tune managed server-side, not client-side | A client-side timer with PTT commands would be fragile -- if the browser tab closes or the WS disconnects mid-tune, the carrier stays keyed. Server-side management ensures the carrier is always unkeyed, even on disconnect. |
+| Separate tune button, not overloading PTT | PTT and tune have different semantics and safety implications. Combining them (e.g., long-press PTT = tune) would be error-prone and violate the principle of least surprise. |
+| Cache Hamlib capability results | Avoids hitting rigctld with known-unsupported commands on every tune attempt. The cache is per-RadioInstance lifetime (cleared on reconnect). |
+| Amber/gold for tune button | Visually distinct from PTT (red) and mode controls (blue/green). Amber signals "caution" which is appropriate for a transmit operation. |
+| SWR always pushed during tune (not just on change) | During tuning, SWR changes rapidly. Sending on every poll cycle (100ms) gives the UI smooth real-time feedback without requiring a separate high-frequency SWR poll. |
+| External tune as universal fallback | Even if Hamlib does not support the radio's ATU commands, the operator can still tune an external tuner by keying a carrier. This ensures the tune button is never completely non-functional. |
+
+### Architecture Decision Record Additions
+
+| # | Topic | Decision |
+|---|-------|----------|
+| 21 | Tune cycle management | **Server-side for external tune** (PTT + timer + safety unkey on disconnect), **fire-and-forget for built-in** (`vfo_op TUNE`). Server manages carrier lifecycle to prevent stuck TX on client disconnect. |
+| 22 | Tune completion detection | **SWR convergence heuristic + timeout**. SWR below 2.0:1 for 3 consecutive polls = success. 10-second hard timeout = failure/unknown. No Hamlib callback available. |
+| 23 | Capability detection | **Try-once-and-cache** per RadioInstance. First `vfo_op TUNE` or `set_func TUNER` attempt that fails with RPRT -4/-11 is cached. Subsequent attempts return cached error without rigctld roundtrip. |
+| 24 | Tune/PTT interlock | **Mutual exclusion enforced server-side**. Cannot start tune while PTT active; cannot engage PTT while tuning. Both checked in WS handler and in `set_ptt`/tune methods. |
+
+### Risks
+
+| Risk | Likelihood | Mitigation |
+|------|-----------|------------|
+| Radio does not report SWR during vfo_op TUNE | Medium | Some radios report SWR only when PTT is software-keyed, not during internal tune. Fall back to timeout-only completion detection. UI shows "Tuning..." without SWR trace. |
+| vfo_op TUNE not idempotent (second call does not cancel) | Low | Some radios toggle tune on repeated TUNE commands, others ignore. The `tune_stop` command is best-effort. Document that stopping a built-in tune may not work on all radios. |
+| External tune carrier gets stuck | Low | Hard timeout (15s max). Safety unkey on WS disconnect. The background task uses try/finally to guarantee PTT release. |
+| SWR convergence heuristic triggers prematurely | Low | Requiring 3 consecutive polls below threshold (300ms at 100ms polling) reduces false positives. The operator can also manually stop tuning. |
+| ATU toggle state drifts from radio front panel | Low | Periodic `get_func TUNER` polling (every 5th cycle) detects front-panel changes. Acceptable latency for a toggle that rarely changes. |
