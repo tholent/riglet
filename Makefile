@@ -1,6 +1,6 @@
 .PHONY: help install install-server install-ui \
         dev server ui \
-        test lint lint-fix typecheck check \
+        test test-server test-ui lint lint-fix typecheck check \
         build clean
 
 # ── Default ──────────────────────────────────────────────────────────────────
@@ -18,7 +18,9 @@ help:
 	@echo "    ui             Svelte dev server on :5173 (proxies /api → :8080)"
 	@echo ""
 	@echo "  Quality checks"
-	@echo "    test           Run backend pytest suite"
+	@echo "    test           Run all tests (backend + frontend)"
+	@echo "    test-server    Run backend pytest suite"
+	@echo "    test-ui        Run frontend vitest suite"
 	@echo "    lint           Ruff linter (backend)"
 	@echo "    lint-fix       Ruff linter with auto-fix (backend)"
 	@echo "    typecheck      mypy (backend) + svelte-check (frontend)"
@@ -48,8 +50,13 @@ ui:
 
 # ── Quality checks ────────────────────────────────────────────────────────────
 
-test:
+test: test-server test-ui
+
+test-server:
 	cd server && uv run pytest
+
+test-ui:
+	cd ui && npm run test
 
 lint:
 	cd server && uv run ruff check .
