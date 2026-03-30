@@ -79,6 +79,8 @@
 		flex-direction: row;
 		align-items: stretch;
 		gap: 0;
+		background: var(--er-panel-bg);
+		border: 1px solid var(--er-ctrl-bg);
 	}
 
 	.knob-stack {
