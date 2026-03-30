@@ -420,7 +420,7 @@
 					<div class="control-block">
 						<ModeSelector mode={radio.mode} {controlWs} {radioId} />
 					</div>
-					<div class="control-block">
+					<div class="control-block control-block--flush">
 						<div class="freq-knob-row">
 							<AudioControls {radioId} {rxVolume} {txGain} audioManager={audioMgr} rfGain={radio.rf_gain ?? 50} squelch={radio.squelch ?? 0} mode={radio.mode} {controlWs} ptt={radio.ptt} tuning={radio.tuning ?? false} tunerEnabled={radio.tuner_enabled ?? false} swr={radio.swr ?? 1.0} />
 							<div class="freq-dsp-col">
@@ -465,7 +465,7 @@
 							{#if panel.component === 'visualization'}
 								<VisualizationPanel bind:mode={vizMode} {radioId} smeter={radio.smeter ?? 0} cursorMhz={radio.freq} radioMode={radio.mode} pcmSamples={radio.ptt ? txPcm : latestPcm} fftBins={simFftBins} />
 							{:else if panel.component === 'frequency'}
-								<div class="inner-block">
+								<div class="inner-block inner-block--flush">
 									<div class="freq-knob-row">
 										<AudioControls {radioId} {rxVolume} {txGain} audioManager={audioMgr} rfGain={radio.rf_gain ?? 50} squelch={radio.squelch ?? 0} mode={radio.mode} {controlWs} ptt={radio.ptt} tuning={radio.tuning ?? false} tunerEnabled={radio.tuner_enabled ?? false} swr={radio.swr ?? 1.0} />
 										<div class="freq-dsp-col">
@@ -496,7 +496,7 @@
 							{:else if panel.component === 'smeter'}
 								<!-- S-meter is now the sidebar of VisualizationPanel -->
 							{:else if panel.component === 'audio'}
-								<div class="inner-block">
+								<div class="inner-block inner-block--flush">
 									<AudioControls {radioId} {rxVolume} {txGain} audioManager={audioMgr} rfGain={radio.rf_gain ?? 50} squelch={radio.squelch ?? 0} mode={radio.mode} {controlWs} ptt={radio.ptt} tuning={radio.tuning ?? false} tunerEnabled={radio.tuner_enabled ?? false} swr={radio.swr ?? 1.0} />
 								</div>
 							{:else if panel.component === 'dsp'}
@@ -670,6 +670,16 @@
 		box-sizing: border-box;
 	}
 
+	.inner-block--flush {
+		padding: 0;
+		display: flex;
+		align-items: stretch;
+	}
+
+	.control-block--flush {
+		padding: 0;
+	}
+
 	.inner-block.preset-inner {
 		display: flex;
 		flex-direction: column;
@@ -677,7 +687,7 @@
 
 	.freq-knob-row {
 		display: flex;
-		align-items: center;
+		align-items: stretch;
 		gap: 12px;
 	}
 
@@ -687,6 +697,8 @@
 		align-items: center;
 		flex: 1;
 		min-width: 0;
+		padding: 10px 0;
+		justify-content: center;
 	}
 
 	/* Narrow single-column fallback */

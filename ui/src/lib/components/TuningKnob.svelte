@@ -159,6 +159,7 @@
 		display: flex;
 		flex-direction: column;
 		align-items: center;
+		justify-content: center;
 		gap: 6px;
 		padding: 6px 0;
 	}
